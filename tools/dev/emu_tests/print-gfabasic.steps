@@ -1,0 +1,21 @@
+# GFA BASIC 3.5E (ST Format's cover disk, drive B, unmodified): a two-line
+# program typed into its editor and run (Shift F10): LPRINT a line of text,
+# then HARDCOPY, GFA's screen dump. The launcher starts
+# B:\GFABASIC\GFABASIC.PRG (make_launcher.py). `type` presses " where the TOS's keyboard has it.
+@printer
+@disk-a tools/dev/builds/launchers/gfabasic.st
+@disk-b $PROGRAM_DISKS/gfa_basic_3_5e/files/gfa_basic_3_5e_st_format.msa
+wait 100
+key 0x01
+wait 1200
+type 'lprint "gfa basic lprint test"\n'
+type hardcopy
+key 0x1c
+wait 25
+shot program
+printwatch
+keydown 0x2a
+key 0x44
+keyup 0x2a
+printer 100 3000
+shot after

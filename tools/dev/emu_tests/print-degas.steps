@@ -1,0 +1,62 @@
+# Degas Elite 1.0 (its Pasti disk in drive B, unmodified), low
+# resolution: its own sample PICTURES\MAGICMTN.PC1 loaded, then File > Print
+# pic with its Epson driver (PRINTERS\EPSON.PRT, chosen with File > Print
+# type). The launcher starts B:\DEGELITE.PRG (make_launcher.py).
+@printer
+@disk-a tools/dev/builds/launchers/degas.st
+@disk-b $PROGRAM_DISKS/degas_elite_1_0/files/Degas_Elite_-_Batteries_included.STX
+wait 100
+key 0x01
+wait 1800
+# the first click after boot is lost: an empty spot first
+mouse 20 190
+click left 2
+wait 25
+# File > Load pic, into PICTURES, the first picture, OK, and OK to replace
+mouse 88 5
+wait 20
+mouse 102 39
+click left 2
+wait 150
+mouse 87 136
+click left 2
+wait 150
+mouse 87 97
+click left 2
+wait 25
+mouse 252 153
+click left 2
+wait 150
+mouse 120 127
+click left 2
+# the Pasti disk loads slowly
+wait 900
+shot loaded
+# File > Print type: a printer driver from PRINTERS
+mouse 88 5
+wait 20
+mouse 102 103
+click left 2
+wait 150
+# up from PICTURES (the close box), into PRINTERS
+mouse 33 81
+click left 2
+wait 150
+mouse 87 145
+click left 2
+wait 150
+# EPSON.PRT, OK
+mouse 87 105
+click left 2
+wait 25
+mouse 252 153
+click left 2
+wait 300
+# File > Print pic
+printwatch
+mouse 88 5
+wait 20
+mouse 102 111
+click left 2
+printer 1000 30000
+shot printed

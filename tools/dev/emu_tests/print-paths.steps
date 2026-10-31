@@ -1,0 +1,25 @@
+# The print paths' reference: tools/dev/st/prpaths.s from a floppy's AUTO
+# folder in stock Hatari, its printer port captured (printer.out) and the
+# BIOS, XBIOS and GEMDOS calls traced (run with --trace bios,xbios,gemdos).
+# Each path waits for a key; the system's printer vectors are read first.
+@hatari stock
+@printer
+@disk-a tools/dev/builds/disks/prpaths.st
+wait 100
+key 0x01
+wait 600
+debug m $b4 4
+debug m $506 8
+debug m $55e 4
+debug m $57e 4
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+printer 100 3000
+shot done

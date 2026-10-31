@@ -1,0 +1,12 @@
+PRINT.TXT: the desktop's Print of a text file (a printer emulator test).
+
+Every printable ASCII character, 32 to 126:
+ !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNO
+PQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~
+
+Lines of 80 columns:
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+The quick brown fox jumps over the lazy dog. THE QUICK BROWN FOX JUMPS OVER THE
+
+A tab:	here.
+End of the test page.

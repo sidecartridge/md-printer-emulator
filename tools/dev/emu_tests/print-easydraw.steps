@@ -1,0 +1,50 @@
+# GDOS: Easy Draw 2.35 (ST Review's cover disk) and its OUTPRINT, printing a
+# drawing through GDOS and the FX-80 driver (GEMSYS\FX80.SYS, ASSIGN.SYS). GDOS
+# loads from the boot disk's AUTO folder, so drive A is a work copy of the
+# whole disk whose DESKTOP.INF/NEWDESK.INF autostart A:\EASYDRAW.PRG in medium
+# resolution (make_launcher.py --inf-only, disk_copy.py --put). Positions are
+# medium resolution's.
+@printer
+@disk-a tools/dev/builds/disks/easydraw.st
+wait 100
+key 0x01
+wait 2500
+# the first click after boot is lost: an empty spot first
+mouse 400 150
+click left 2
+wait 25
+# File > OUTPRINT..., don't save
+mouse 87 5
+wait 25
+mouse 124 87
+click left 2
+wait 200
+mouse 347 127
+click left 2
+wait 800
+shot outprint
+# Edit > Add Name (Alt A): DRAWINGS\HOUSE.GEM
+keydown 0x38
+key a
+keyup 0x38
+wait 150
+mouse 244 105
+click left 2
+wait 150
+key 0x01
+type house.gem
+key 0x1c
+wait 150
+shot listed
+# File > Start Outprint (Ctrl P)
+keydown 0x1d
+key p
+keyup 0x1d
+wait 300
+shot start
+# Device: Printer (the default), OK
+printwatch
+mouse 455 129
+click left 2
+printer 1000 60000
+shot printed

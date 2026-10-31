@@ -17,7 +17,7 @@ tools/dev/build_hatari_fork.sh       # emumd's Hatari, about 2.5 min
 mkdir -p emu/tos emu/sd
 ln -s "/path/to/TOS 1.04 - English UK - 50Hz.img" emu/tos/tos104uk.img
 ln -s "/path/to/TOS 1.62 - English-UK - 50Hz"     emu/tos/tos162uk.img
-ln -s "/path/to/TOS 2.06 - English-UK - 50Hz"     emu/tos/tos206uk.img
+ln -s "/path/to/TOS v2.06 (1991)(Atari Corp)(Mega-STE)(US).img" emu/tos/tos206us.img
 ```
 
 `emu/tos/` and `emu/sd/` (the emulated microSD card) are gitignored.
@@ -74,7 +74,8 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `template-reset` | warm resets: the menu again, then the user firmware once per reset |
 | `template-coldreset` | a cold reset power-cycles the Multi-device: the menu again |
 | `floppy-auto` | a floppy's `AUTO` program runs after the cartridge, then the desktop |
-| `althelp-reference` | stock Hatari: Alt-Help's dump as the printer port receives it |
+| `print-paths` | stock Hatari: one line through each TOS print path (`st/prpaths.s`) |
+| `print-...` | a program prints (the desktop, Alt-Help, ST Writer, 1st Word Plus, GFA BASIC, Degas Elite, GDOS, XControl's printer settings, our ESC/P pages, Calamus, Signum 3), and `printwatch` says whether through TOS |
 | `impossible` | must FAIL: the harness can fail |
 
 `text` reads the setup terminal back as text: `template_extra.c` matches each
@@ -88,13 +89,28 @@ cartridge, so the firmware's boot code would not run. Programs come on
 floppies and ACSI hard-disk images:
 
 ```sh
+tools/dev/make_program_disks.sh                   # the program tests' launchers and work copies
 tools/dev/make_floppy.sh FOLDER disk.st [LABEL]   # 720 KB, checked file by file
 tools/dev/make_acsi.sh FOLDER disk.img [MB]       # PPDRIVER, by ../atari-hd (ATARI_HD)
 tools/dev/make_bench_disks.sh                     # the tests' own, in tools/dev/builds/disks/
 tools/dev/st/build.sh                             # the bench's ST programs (tools/dev/st/*.s)
 ```
 
-`.ST`, `.MSA` and Pasti `.STX` images all load. After a run with `--acsi`, the
+`.ST`, `.MSA` and Pasti `.STX` images all load.
+
+The programs the printer is tested with are downloaded disks outside the repository
+(`$PROGRAM_DISKS`, by default `/Volumes/MacData/md-printer-emulator-disks`), never modified. A
+*launcher* floppy in drive A starts a program from its own disk in drive B by itself: the `#Z`
+line of `DESKTOP.INF` (TOS 1.x) and `NEWDESK.INF` (TOS 2.x), with `#E` setting the resolution
+(`make_launcher.py`). A program that looks for its files on its own drive (Easy Draw with GDOS
+in its AUTO folder, Calamus) boots from a *work copy* of its disk with those INF files put on
+it (`disk_copy.py --put`); a program too large for a floppy (Signum 3) from an ACSI image.
+`--hatari bare` (the fork with no firmware) is the reference for programs that need the
+mouse; `printwatch` counts every entry into TOS's printer routine, by caller.
+
+The TOS 2.06 is the US build (country 0, NTSC, 60 Hz): the UK images on this Mac were either
+the US one under a UK name or a patched SuperTOS. `type` presses the characters whose key
+depends on the keyboard (`"`, `@`, `'`) where the running TOS's country puts them. After a run with `--acsi`, the
 image's files are copied out to the run's `acsi-files/`.
 
 ## Gotchas
@@ -110,8 +126,10 @@ image's files are copied out to the run's `acsi-files/`.
 - **`mouse X Y` pins the pointer in the top left corner once**, then moves from
   where it is: crossing GEM's menu bar on the way opens its menus.
 - **TOS 2.06 dithers the desktop** (green and white on alternate pixels), runs
-  a memory test (ESC cuts it short), needs a floppy drive to boot, and places
-  the desktop's icons differently from TOS 1.x.
+  a memory test (ESC cuts it short: tests send one early, which the other TOS
+  ignore), and places the desktop's icons differently from TOS 1.x. It crashes
+  with no floppy drive connected: the harness never turns drive A off (only
+  drive B, when no disk is given for it).
 - **A warm reset leaves the Multi-device running; a cold reset power-cycles
   it**, as on hardware.
 - **SELECT cannot be pressed**: emumd's stand-in discards the firmware's
@@ -119,3 +137,16 @@ image's files are copied out to the run's `acsi-files/`.
 - **Keys sent before a program reads them stay in the keyboard buffer**: an
   ESC meant for a Mega STE's memory test reaches the next program on another
   machine.
+- **Hatari does not deliver punctuation typed as characters**: `type` sends it
+  by scancode, and the layout-dependent ones (`" @ ' \ _`) where the running
+  TOS's country puts them.
+- **GEM's file selector takes an 8.3 name**, no path: enter folders by
+  clicking them, then type the name.
+- **Programs differ in double clicks and pointers**: XControl opens a CPX
+  with a 60 ms double click (100 ms is too slow on TOS 2.06); Signum
+  accelerates the pointer (`--mouse-step 2`) and takes clicks one row above it.
+- **Printing in the first seconds after boot, straight after the floppy is
+  read, loses every byte on Hatari's printer port** though TOS's routine runs:
+  test programs wait for a key first.
+- **Breakpoints that trace every hit slow Hatari to a crawl**: `printwatch`
+  reports the ROM calls every 64th hit.

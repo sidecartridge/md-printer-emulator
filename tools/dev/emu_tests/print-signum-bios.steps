@@ -1,0 +1,81 @@
+# Signum 3 1.30, as print-signum but with the output channel
+# "Centronics, BIOS". Signum 3 1.30 (Application Systems Heidelberg, German), high resolution,
+# 4 MB, from an ACSI hard disk: a sample document printed through its
+# print program (PRDRV.APL) with the driver it is set up for, an Epson
+# LQ-500/550 (24-pin; Signum 3 has no 9-pin FX driver): the question is
+# whether it prints through TOS (Signum! 2 drove the port itself). The ACSI
+# image (make_acsi.sh) holds C:\SIGNUM3 and DESKTOP.INF/NEWDESK.INF that
+# autostart C:\SIGNUM3\SIGNUM3.PRG; prdrv.inf's driver path, E:\SIGNUM3\ on the
+# uploader's hard disk, is C:\SIGNUM3\ in the copy. Signum accelerates the
+# pointer: moves of 2 pixels a frame. Positions are high resolution's.
+@printer
+@monitor mono
+@memsize 4
+@mouse-step 2
+@disk-a tools/dev/builds/launchers/signum.st
+@acsi tools/dev/builds/disks/signum.img
+wait 3000
+# the first click after boot is lost: an empty spot first
+mouse 400 300
+click left 2
+wait 25
+# Datei > Dokument laden (Ctrl O)
+keydown 0x1d
+key o
+keyup 0x1d
+wait 150
+# into DEMO: Signum takes a click one row (16 pixels) above where the pointer
+# is drawn, so the click aims at DEMO's row + 16; then the sample HAUS.SDK
+mouse 190 168
+click left 2
+wait 100
+shot demo
+type haus.sdk
+key 0x1c
+wait 400
+shot loaded
+# Datei > ins Druckprogramm (Ctrl P): Signum's print program
+keydown 0x1d
+key p
+keyup 0x1d
+wait 1500
+shot prdrv
+# no driver loaded yet: Lade! (the default button)
+key 0x1c
+wait 200
+shot trbsel
+# into TREIBER (the print program takes clicks where the pointer is drawn),
+# LQ850.TRB (prdrv.inf's driver)
+mouse 190 280
+click left 2
+wait 100
+type lq850.trb
+key 0x1c
+wait 300
+shot drvloaded
+# the driver's summary: OK
+key 0x1c
+wait 100
+# the print list's own Drucke: the print dialog, output channel "Centronics
+# schnell" (its default)
+mouse 128 87
+wait 25
+shot druckdlg
+# the output channel: "Centronics, BIOS" instead of the default "Centronics
+# schnell", then OK
+mouse 270 307
+click left 2
+wait 100
+mouse 219 167
+click left 2
+wait 25
+mouse 268 307
+click left 2
+wait 100
+shot kanalbios
+# Starte Ausdruck!
+printwatch
+mouse 213 339
+click left 2
+printer 62000 90000
+shot printed

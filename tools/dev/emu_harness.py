@@ -6,9 +6,11 @@ with steps, and end in PASS or FAIL with the evidence.
                   plugin (build/md-printer-emulator.mdfw): the cartridge boots
                   from the firmware's own image, the RP side is the firmware's
                   own C code (the default).
-  --hatari stock  stock Hatari (dev: /usr/local/bin/hatari), no cartridge: the
+  --hatari stock  stock Hatari (/usr/local/bin/hatari), no cartridge: the
                   reference, e.g. what a program sends to the printer port
                   (--printer).
+  --hatari bare   emumd's fork with no firmware: a reference run that needs
+                  the mouse (stock Hatari has no mouse events).
 
 Setups: st-104 (ST, TOS 1.04), ste-162 (STE, TOS 1.62), mste-206 (Mega STE,
 TOS 2.06); TOS images linked into emu/tos/ (gitignored). Hatari runs at the
@@ -19,8 +21,10 @@ machine's own speed unless --fast; times in steps are emulated frames (VBLs,
 
 Steps, in order (--step, or --test NAME for tools/dev/emu_tests/NAME.steps;
 a test's "@disk-a PATH", "@disk-b PATH" or "@acsi PATH" line gives the run that
-disk, relative to the repository, unless the command line does; "@hatari
-stock" and "@printer" set those options):
+disk, relative to the repository ($PROGRAM_DISKS: the downloaded programs'
+disks, by default /Volumes/MacData/md-printer-emulator-disks), unless the
+command line does; "@hatari
+stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those options):
 
   wait FRAMES           let FRAMES frames pass
   key KEY [FRAMES]      press a key for FRAMES frames (3), then release it: an
@@ -51,8 +55,14 @@ stock" and "@printer" set those options):
                         SCREEN_TOLERANCE of its pixels (--update-refs writes
                         the reference from the screen instead, and passes)
   desktop FRAMES        wait until the screen is the TOS desktop (colour)
-  printer NBYTES FRAMES wait until the printer port has had NBYTES bytes, then
-                        until it has been quiet for 100 frames (--printer)
+  printer NBYTES FRAMES [QUIET]
+                        wait until the printer port has had NBYTES bytes, then
+                        until it has been quiet for QUIET frames (500)
+                        (--printer)
+  printwatch            count the entries into TOS's printer routine from now
+                        on, by caller: from ROM to within 63, from RAM exactly,
+                        next to the printer port's bytes in report.json (not
+                        with the firmware: a breakpoint slows every byte)
   rom4 NAME             the 64 KB cartridge window, NAME.bin (fork only)
   reset warm|cold       reset the ST (a cold reset power-cycles the
                         Multi-device too; a warm one leaves it running)
@@ -93,17 +103,21 @@ sys.path.insert(0, str(DEV))
 import screens  # noqa: E402
 
 FORK = DEV / "builds/emumd-cache/hatari-fork/build/src/hatari"
+# Where the test programs' disks are (downloaded, never committed); a test
+# names them as $PROGRAM_DISKS/...
+os.environ.setdefault("PROGRAM_DISKS", "/Volumes/MacData/md-printer-emulator-disks")
 STOCK = Path("/usr/local/bin/hatari")
 PLUGIN = ROOT / "build/md-printer-emulator.mdfw"
 TESTS = DEV / "emu_tests"
 REFS = DEV / "emu_refs"
 SETUPS = {"st-104": ("st", "emu/tos/tos104uk.img"),
           "ste-162": ("ste", "emu/tos/tos162uk.img"),
-          "mste-206": ("megaste", "emu/tos/tos206uk.img")}
+          "mste-206": ("megaste", "emu/tos/tos206us.img")}
 SCREEN_TOLERANCE = 0.002  # a screen equals its reference: this share of pixels may differ
 MOUSE_STEP = 8            # pixels a frame at most: Hatari drops what the IKBD has no room for
 MOUSE_PIN = (640, 400)    # more than any ST screen
 MOUSE_SETTLE = 10         # frames after a move before anything else
+WATCH_SKIP = 64           # printwatch: the ROM breakpoint reports every 64th hit
 M68K_SOURCES = ROOT / "target/atarist"
 TARGET_FIRMWARE = ROOT / "rp/src/include/target_firmware.h"
 
@@ -111,9 +125,24 @@ TARGET_FIRMWARE = ROOT / "rp/src/include/target_firmware.h"
 # purpose, sizing memory and probing hardware from its ROM; any other is a crash.
 CRASH_RE = re.compile(rb"WARN : (Bus|Address) Error \w+ at address \$([0-9a-f]+), PC=\$([0-9a-f]+)")
 TOS_ROM = (0xE00000, 0x1000000)
+# Hardware programs probe for, catching the bus error when it is absent: not
+# crashes. $FFFA40: an SFP-004 FPU (Calamus); $FF8A00: the blitter; $FF8900:
+# DMA sound; $FFFC20: a Mega ST's clock.
+PROBES = {0xFFFFFA40, 0xFFFF8A00, 0xFFFF8900, 0xFFFFFC20, 0xFFFA40, 0xFF8A00, 0xFF8900, 0xFFFC20}
 
-# Characters Hatari's keypress takes as themselves; the rest by scancode.
-TYPE_KEYS = {"\n": "0x1c", " ": "0x39"}
+# Characters Hatari's keypress takes as themselves (letters, digits); the
+# rest by scancode: Hatari does not deliver punctuation typed as characters.
+TYPE_KEYS = {"\n": "0x1c", " ": "0x39", ".": "0x34", ",": "0x33", "-": "0x0c",
+             "/": "0x35", ";": "0x27"}
+TYPE_SHIFTED = {":": "0x27"}
+# Characters whose key depends on the TOS's keyboard (its country, in the TOS
+# header's os_conf): (scancode, shifted).
+LAYOUTS = {
+    0: {'"': ("0x28", True), "@": ("0x03", True), "'": ("0x28", False),   # USA
+        "\\": ("0x2b", False), "_": ("0x0c", True)},
+    3: {'"': ("0x03", True), "@": ("0x28", True), "'": ("0x28", False),   # UK
+        "\\": ("0x60", False), "_": ("0x0c", True)},
+}
 
 
 def is_desktop(screen):
@@ -134,6 +163,8 @@ class StepFailed(Exception):
 def crashes(out_bytes):
     found = []
     for m in CRASH_RE.finditer(out_bytes):
+        if int(m.group(2), 16) in PROBES:
+            continue
         if not TOS_ROM[0] <= int(m.group(3), 16) < TOS_ROM[1]:
             found.append(m.group(0).decode(errors="replace")[7:])
     return found
@@ -270,7 +301,8 @@ class Run:
         self.start = time.time()
         self.shot_count = 0
         self.pointer = None  # where the pointer is, once pinned
-
+        tos = (ROOT / SETUPS[args.setup][1]).read_bytes()[0x1C:0x1E]
+        self.tos_country = int.from_bytes(tos, "big") >> 1  # os_conf's country
     def frames_from_now(self, frames):
         return self.hatari.vbl() + int(frames)
 
@@ -326,14 +358,30 @@ class Run:
         self.wait_frames(2)
 
     def step_type(self, *words):
+        """Types TEXT: letters, digits and the layout's own characters
+        (LAYOUTS: " @ ' \\ _) by the key the running TOS expects."""
         text = " ".join(words).encode().decode("unicode_escape")
+        layout = LAYOUTS.get(self.tos_country, {})
         for ch in text:
-            self.press(TYPE_KEYS.get(ch, ch))
+            if ch in layout:
+                key, shifted = layout[ch]
+                if shifted:
+                    self.hatari.send("hatari-event keydown 0x2a")
+                self.press(key)
+                if shifted:
+                    self.hatari.send("hatari-event keyup 0x2a")
+            elif ch in TYPE_SHIFTED:
+                self.hatari.send("hatari-event keydown 0x2a")
+                self.press(TYPE_SHIFTED[ch])
+                self.hatari.send("hatari-event keyup 0x2a")
+            else:
+                self.press(TYPE_KEYS.get(ch, ch))
 
     def move_mouse(self, dx, dy):
         while dx or dy:
-            sx = max(-MOUSE_STEP, min(MOUSE_STEP, dx))
-            sy = max(-MOUSE_STEP, min(MOUSE_STEP, dy))
+            step = self.args.mouse_step
+            sx = max(-step, min(step, dx))
+            sy = max(-step, min(step, dy))
             self.hatari.send(f"hatari-event mousemove {sx} {sy}")
             self.wait_frames(1)
             dx, dy = dx - sx, dy - sy
@@ -428,9 +476,10 @@ class Run:
             return is_desktop(screens.load(self.hatari.shot(f"desktop-{self.shot_count}")))
         self.wait_for(frames, check, "the TOS desktop")
 
-    def step_printer(self, nbytes, frames):
+    def step_printer(self, nbytes, frames, quiet="500"):
         """Wait until the printer port has received at least NBYTES bytes
-        (--printer), and until it has been quiet for 100 frames."""
+        (--printer), and then until it has been quiet for QUIET frames (500:
+        programs pause between passes and pages, Signum for over 100)."""
         out = self.run_dir / "printer.out"
         if not self.args.printer:
             raise StepFailed("printer needs --printer")
@@ -439,7 +488,43 @@ class Run:
         size = -1
         while out.stat().st_size != size:
             size = out.stat().st_size
-            self.wait_frames(100)
+            self.wait_frames(int(quiet))
+
+    def step_printwatch(self):
+        """Breakpoints that count every entry into TOS's printer routine
+        (xconout[0], read from $57E): those called from TOS's ROM (the BIOS
+        trap's dispatch, the screen dump through prv_lst) and those called
+        from RAM (a program calling the routine itself). The report's
+        "printwatch" puts them next to the bytes the printer port got
+        (--printer): more bytes than entries means the program drives the
+        port's hardware."""
+        mark = len(self.hatari.output())
+        self.hatari.send("hatari-debug m $57e 4")
+        found = self.wait_for(100, lambda: re.search(
+            rb"0000057[eE]: ([0-9a-f]{2}) ([0-9a-f]{2}) ([0-9a-f]{2}) ([0-9a-f]{2})",
+            self.hatari.output()[mark:]), "xconout[0]")
+        routine = int(b"".join(found.groups()), 16)
+        rom = 0xFC0000 if routine >= 0xFC0000 else 0xE00000
+        self.printwatch = {"routine": f"${routine:06x}", "rom": f"${rom:06x}"}
+        # Every 64th hit only: a line for each of a screen dump's 64 KB slows
+        # Hatari to a crawl. Calls from RAM are rare and counted exactly.
+        self.hatari.send(f"hatari-debug b pc = ${routine:x} && (a7).l > ${rom - 1:x} :trace :{WATCH_SKIP}")
+        self.hatari.send(f"hatari-debug b pc = ${routine:x} && (a7).l < ${rom:x} :trace")
+        self.wait_frames(2)
+
+    def printwatch_counts(self):
+        """The breakpoints' hits, from Hatari's output, by caller."""
+        if not getattr(self, "printwatch", None):
+            return None
+        text = self.hatari.out_path.read_bytes().decode("latin1")
+        hits = re.findall(r"CPU breakpoint condition\(s\) matched (\d+) times\.\s*\n\s*(.*)", text)
+        result = dict(self.printwatch)
+        rom = [int(n) for n, h in hits if "> $" in h]
+        result["from_rom"] = f"{max(rom, default=0)} to {max(rom, default=0) + WATCH_SKIP - 1}"
+        result["from_ram"] = sum(1 for n, h in hits if "< $" in h)
+        out = self.run_dir / "printer.out"
+        result["port_bytes"] = out.stat().st_size if out.exists() else 0
+        return result
 
     def step_rom4(self, name):
         shutil.copy(self.request("rom4", "rom4.bin"), self.run_dir / f"{name}.bin")
@@ -483,11 +568,18 @@ def load_steps(args):
                 attr = option.replace("-", "_")
                 if attr in ("disk_a", "disk_b", "acsi"):
                     if not getattr(args, attr):
-                        setattr(args, attr, str(ROOT / value.strip()))
+                        disk = os.path.expandvars(value.strip())
+                        setattr(args, attr, str(ROOT / disk))  # absolute stays absolute
                 elif attr == "hatari":
                     args.hatari = value.strip()
                 elif attr == "printer":
                     args.printer = True
+                elif attr == "monitor":
+                    args.monitor = value.strip()
+                elif attr == "memsize":
+                    args.memsize = int(value.strip())
+                elif attr == "mouse_step":
+                    args.mouse_step = int(value.strip())
                 else:
                     raise SystemExit(f"{path.name}: unknown option {line}")
             elif line and not line.startswith("#"):
@@ -497,7 +589,7 @@ def load_steps(args):
 
 def hatari_command(args, run_dir):
     machine, tos = SETUPS[args.setup]
-    binary = FORK if args.hatari == "fork" else STOCK
+    binary = STOCK if args.hatari == "stock" else FORK
     cmd = [str(binary), "--tos", str(ROOT / tos), "--machine", machine,
            "--memsize", str(args.memsize), "--sound", "off", "--statusbar", "off",
            "--drive-led", "off", "--harddrive", "none",
@@ -519,6 +611,8 @@ def hatari_command(args, run_dir):
         cmd += ["--printer", str(run_dir / "printer.out")]
     if args.trace:
         cmd += ["--trace", args.trace]
+    if args.monitor:
+        cmd += ["--monitor", args.monitor]
     if args.hatari == "fork":
         shutil.copytree(ROOT / "emu/sd", run_dir / "sd")
         cmd += ["--md-sd", str(run_dir / "sd"), "--md-verbose", "on",
@@ -531,7 +625,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
     ap.add_argument("--setup", choices=SETUPS, default="st-104")
-    ap.add_argument("--hatari", choices=("fork", "stock"), default="fork")
+    ap.add_argument("--hatari", choices=("fork", "stock", "bare"), default="fork")
     ap.add_argument("--test", action="append", default=[], help="tools/dev/emu_tests/NAME.steps")
     ap.add_argument("--step", action="append", default=[])
     ap.add_argument("--name", help="the run folder's suffix (default: the tests' names)")
@@ -540,6 +634,11 @@ def main():
     ap.add_argument("--acsi", help="an ACSI hard-disk image, ACSI ID 0")
     ap.add_argument("--printer", action="store_true", help="Hatari's printer port to printer.out")
     ap.add_argument("--trace", help="Hatari's --trace, e.g. gemdos,bios,xbios (into hatari.out)")
+    ap.add_argument("--monitor", choices=("mono", "rgb"),
+                    help="Hatari's monitor: mono boots TOS in high resolution, 640 x 400")
+    ap.add_argument("--mouse-step", type=int, default=MOUSE_STEP,
+                    help="pixels a frame a mouse move goes at most (a program that "
+                         "accelerates the pointer needs fewer)")
     ap.add_argument("--memsize", type=int, default=1, help="ST RAM in MB (0 is 512 KB)")
     ap.add_argument("--fast", action="store_true", help="fast-forward")
     ap.add_argument("--window", action="store_true", help="show Hatari's window")
@@ -614,6 +713,12 @@ def main():
     if args.acsi:
         report["acsi_files"] = acsi_files(run_dir / Path(args.acsi).name, run_dir / "acsi-files")
         print(f"  ACSI image's files in acsi-files/: {report['acsi_files']}")
+    watch = run.printwatch_counts()
+    if watch:
+        report["printwatch"] = watch
+        print(f"  printwatch: {watch['port_bytes']} bytes on the port; the printer routine "
+              f"{watch['routine']} entered {watch['from_rom']} times from ROM, "
+              f"{watch['from_ram']} from RAM")
     report["crashes"] = crashes(hatari.out_path.read_bytes())
     for c in report["crashes"]:
         print(f"  CRASH {c}")

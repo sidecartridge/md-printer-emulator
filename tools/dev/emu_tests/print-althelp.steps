@@ -11,6 +11,7 @@ key 0x01
 screen same autotest 1500
 key 0x39
 desktop 2500
+printwatch
 keydown 0x38
 key 0x62
 keyup 0x38

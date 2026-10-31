@@ -66,7 +66,7 @@ def emulated():
     fork = DEV / "builds/emumd-cache/hatari-fork/build/src/hatari"
     check("emumd's Hatari fork built", fork.exists(), "tools/dev/build_hatari_fork.sh"
           if not fork.exists() else str(fork.relative_to(ROOT)))
-    for tos in ("tos104uk.img", "tos162uk.img", "tos206uk.img"):
+    for tos in ("tos104uk.img", "tos162uk.img", "tos206us.img"):
         p = ROOT / "emu/tos" / tos
         check(f"emu/tos/{tos}", p.exists(), "a link to the TOS image" if not p.exists() else "")
     check("emu/sd/ (the emulated card)", (ROOT / "emu/sd").is_dir())

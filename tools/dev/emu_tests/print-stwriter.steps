@@ -1,0 +1,21 @@
+# ST Writer Elite: TEMPLATE.TXT (from its own disk) printed with the
+# print dialog's defaults (Printer, Draft). The program disk is drive B,
+# unmodified; the launcher in drive A starts B:\STWRITER.PRG at boot
+# (tools/dev/make_launcher.py). Reference runs (bare or stock): the printer
+# port's bytes and whether they all went through TOS's printer routine.
+@printer
+@disk-a tools/dev/builds/launchers/stwriter.st
+@disk-b $PROGRAM_DISKS/st_writer_elite_4_0/files/st_writer_elite_atari_(usa).st
+wait 100
+key 0x01
+wait 1300
+key l
+wait 150
+type template.txt
+key 0x1c
+wait 200
+key p
+wait 150
+printwatch
+key 0x1c
+printer 100 3000

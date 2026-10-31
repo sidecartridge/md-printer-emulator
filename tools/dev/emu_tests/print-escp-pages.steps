@@ -1,0 +1,13 @@
+# our ESC/P test pages (tools/dev/st/make_escp_pages.py: TEXT.PRN, every
+# text mode; GRAPH.PRN, every bit-image density), sent byte by byte through
+# BIOS Bconout(0) by PRFILES.PRG from the floppy's AUTO folder
+# (make_bench_disks.sh, escp.st). The printer port must receive the two files
+# exactly (the run's printer.out against them).
+@printer
+@disk-a tools/dev/builds/disks/escp.st
+wait 100
+key 0x01
+wait 900
+printwatch
+key 0x39
+printer 2000 4000

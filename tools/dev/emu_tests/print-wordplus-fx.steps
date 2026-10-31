@@ -1,0 +1,38 @@
+# 1st Word Plus 2.02 with its Epson FX table: a work copy of disk 1 whose
+# PRINTER.CFG is its own PRINTERS\EPSON_FX.CFG (tools/dev/disk_copy.py), in
+# drive B; otherwise as print-wordplus: DOCS\TEST_C.DOC printed with the print
+# options' defaults, the launcher starting B:\WORDPLUS.PRG in medium
+# resolution (make_launcher.py --res medium).
+# Positions are medium resolution's (640 x 200).
+@printer
+@disk-a tools/dev/builds/launchers/wordplus.st
+@disk-b tools/dev/builds/disks/wordplus-fx.st
+wait 100
+key 0x01
+wait 1500
+# the first click after boot is lost: an empty spot first
+mouse 30 30
+click left 2
+wait 25
+# the Open dialog at start: Cancel (printing an open file asks to save it)
+mouse 411 169
+click left 2
+wait 100
+# File, Print file...: into DOCS, then the file's name
+mouse 72 4
+mouse 114 23
+click left 2
+wait 150
+mouse 234 96
+click left 2
+wait 100
+key 0x01
+type test_c.doc
+key 0x1c
+wait 200
+shot printopts
+# the print options' defaults: OK
+printwatch
+mouse 352 169
+click left 2
+printer 100 6000

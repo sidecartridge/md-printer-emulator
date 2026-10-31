@@ -1,0 +1,53 @@
+# the printer settings Alt-Help's dump follows (Setprt): XControl 1.0
+# (Atari, freeware) and its Printer CPX change them, then Alt-Help. Drive A is
+# an .ST copy of XControl's disk (XCONTROL.ACC at its root) with its
+# CPX\PRINTER.CPX also at the root, where XControl looks (A:\*.CPX;
+# disk_copy.py --copy). Low resolution, TOS 1.x desktop positions.
+@printer
+@disk-a tools/dev/builds/disks/xcontrol.st
+wait 100
+key 0x01
+desktop 2500
+wait 50
+# the first click after boot is lost: an empty spot first
+mouse 280 180
+click left 2
+wait 25
+# Desk > Control Panel (XControl)
+mouse 24 5
+wait 25
+mouse 84 31
+click left 2
+wait 200
+shot panel
+# open Printer Setup (a double click: 60 ms between its events opens it on
+# TOS 2.06 too, where 100 ms is too slow)
+mouse 182 82
+wait 25
+dblclick 60
+wait 150
+shot printcpx
+# Quality: Draft -> Final
+mouse 162 144
+click left 2
+wait 50
+mouse 170 165
+click left 2
+wait 50
+shot final
+# OK (the settings take effect: Setprt), then close XControl's window
+mouse 159 180
+click left 2
+wait 100
+mouse 36 17
+click left 2
+wait 100
+# Alt-Help: the screen dump, with the new settings
+printwatch
+keydown 0x38
+key 0x62
+keyup 0x38
+# Final quality doubles the dump (127,500 bytes; Draft 64,026): at least
+# 120,000 bytes shows the setting took
+printer 120000 9000
+shot after

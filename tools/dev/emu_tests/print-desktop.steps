@@ -1,0 +1,25 @@
+# the desktop's "Print" of a text file: tools/dev/st/documents/desktop/PRINT.TXT on
+# a launcher whose desktop opens drive A's window at boot
+# (make_launcher.py --files tools/dev/st/documents/desktop --window 'A:\*.*'); the file
+# is selected with a click, opened from the File menu, and TOS's alert's Print
+# is clicked. Positions are TOS 1.x's low-resolution desktop.
+@printer
+@disk-a tools/dev/builds/launchers/desktop.st
+wait 100
+key 0x01
+desktop 2500
+wait 50
+mouse 280 180
+click left 2
+wait 25
+mouse 180 51
+click left 2
+wait 25
+mouse 88 5
+mouse 88 14
+click left 2
+wait 100
+printwatch
+mouse 160 127
+click left 2
+printer 100 3000

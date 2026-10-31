@@ -1,0 +1,42 @@
+# Calamus 1.09N (DMC, German), high resolution, 4 MB: an empty new
+# document printed with the only driver on its disk, an HP LaserJet Plus
+# (DRUCKER\HP_LJETP.CPD): the question is whether Calamus prints through TOS or
+# drives the port itself (Atarimania's iPRN page: Calamus 1.x does the
+# latter). Drive A is a work copy of its disk: DESKTOP.INF/NEWDESK.INF
+# autostart A:\CALAMUS.PRG, and CALAMUS.SET's folders, E:\CALAMUS1.09N\ and
+# E:\CALAMUS_.SL\ on the uploader's hard disk, point at A:\ with
+# HP_LJETP.CPD as the printer (disk_copy.py --put). Positions are high
+# resolution's (640 x 400).
+@printer
+@monitor mono
+@memsize 4
+@disk-a tools/dev/builds/disks/calamus.st
+wait 7000
+# the first click after boot is lost: an empty spot first
+mouse 500 300
+click left 2
+wait 25
+# Datei > Neu anlegen
+mouse 73 8
+wait 25
+mouse 105 27
+click left 2
+wait 200
+shot new
+# no fonts on the disk: Abbruch
+mouse 315 252
+click left 2
+wait 100
+# Datei > Drucken (einstellen)
+mouse 73 8
+wait 25
+mouse 155 171
+click left 2
+wait 200
+shot printdlg
+# DRUCKEN with the defaults (150 x 150 dpi, A4, Parallel)
+printwatch
+mouse 126 366
+click left 2
+printer 1000 60000
+shot printed
