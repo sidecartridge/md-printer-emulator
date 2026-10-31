@@ -6,7 +6,7 @@ See also: `programming.md` (full shared-region table and budget rules), `README.
 
 ## What this repo is
 
-Template for a **Sidecartridge Multi-device microfirmware app** targeting Atari ST / STE / MegaST(E). Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
+A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. The code is still the unmodified template (`desc/app.json` carries the template's name, tags and placeholder image, `README.md` and `CHANGELOG.md` are the template's, `userfw.s` is the Cconws demo, and no printer logic exists yet on either side). Where this file says "the template", it describes that inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
 
 ## Build
 
@@ -46,11 +46,11 @@ Build flow (orchestrated by `build.sh`). Every script stops at the first failing
 ### CI / release
 - `.github/workflows/build.yml` builds `pico_w` on every pull request: release and debug, each with `APP_DOWNLOAD_HTTPS` 0 and 1, so the profile the default build leaves out cannot stop compiling unnoticed.
 - `.github/workflows/release.yml` triggers on `v*` tags: builds, attaches UF2 + JSON to the GitHub Release, uploads to `s3://atarist.sidecartridge.com/`.
-- `make tag` tags HEAD with the contents of `version.txt` and pushes the tag (which triggers release). **In this template repo, don't tag** — a change lands as a `version.txt` bump plus a `CHANGELOG.md` entry; tagging/releasing is the repo owner's call. Apps generated from the template do tag.
+- `make tag` tags HEAD with the contents of `version.txt` and pushes the tag (which triggers release). This is an app repo, so releases are tagged here, but **tagging is the repo owner's call**: a change lands as a `version.txt` bump plus a `CHANGELOG.md` entry, and the owner tags. The first release still needs `desc/app.json` filled in (the `uuid` placeholder is substituted by the build; `name`, `description`, `image`, `tags` and the `binary` host are not) and the UUID in `.vscode/cmake-variants.yaml` (the development one, `44444444-…`) replaced by this app's.
 - `upload_s3.sh <file>` is a manual one-off uploader; needs `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
 
 ### Tests / verification
-There is no test suite, and no way to run this off-hardware. "Verification" is: the build succeeds (including the 8 KB cartridge assertion), the UF2 boots on the device, and you interact with it manually over the serial debug console and the ST terminal menu.
+Two benches. **Emulated**: emumd (submodule `emu/emumd`) builds the firmware's own C code as a plugin for its fork of Hatari, and `tools/dev/emu_harness.py` runs it on an ST (TOS 1.04), STE (1.62) or Mega STE (2.06) with the tests in `tools/dev/emu_tests/`, ending in PASS or FAIL; `emu/README.md` has the set-up, the harness and its gotchas (never Hatari's GEMDOS drive, never a GEMDOS/VDI/AES trace with the firmware: both replace the cartridge). It times nothing and has no PIO, DMA, USB or SELECT. **The device**: the build succeeds (including the 8 KB cartridge assertion), the UF2 boots, and you check it over the serial debug console, the ST terminal menu and the SWD tools below. Timing, the bus and sign-off are always on the device.
 
 - `DPRINTF` / `DPRINTFRAW` (`rp/src/include/debug.h`) compile to nothing unless `_DEBUG != 0`, and `pico_enable_stdio_uart` is only turned on for debug builds — so a `release` UF2 prints nothing at all. Build with `./build.sh <board> debug <uuid>` to get a serial console. (Up to v1.2.1 `rp/src/CMakeLists.txt` turned `DEBUG_MODE=0` into `_DEBUG=1`, so every "release" build was a debug build; if a release build ever prints, check `-D_DEBUG=` in its `flags.make`.)
 - On-chip debugging is via a Picoprobe/Debug Probe and the `cortex-debug` VS Code launch config in `.vscode/launch.json`; it needs `ARM_GDB_PATH` and `PICO_OPENOCD_PATH` exported. CMake source dir is `rp/src`, build dir is `rp/build`.
@@ -90,6 +90,11 @@ repeatable (its `README.md` has the full command list):
   sets them for the run). `power_cycles.py` counts cold boots that reach the setup menu.
   Power-cycle the ST sparingly; reset it through the sentinel for everything else (the harnesses
   do).
+- `python3 tools/dev/check_env.py` says ok or FAIL for everything both benches need. After a
+  `postmortem` (the last check of `tools_harness.py`) the RP keeps running but, until a chip reset
+  (`swd.py reset`, or `tools_harness.py --reset`), SWD reads of the flash return zeros and SELECT
+  presses go unseen: reset before `select_harness.py`. Its `long` case is a factory reset of the
+  device's settings: never without Diego's word (`select_harness.py backup FILE` first).
 
 ### Planning backlog (`docs/`)
 `docs/epics/` holds the local planning notes (`cockpit.sh` regenerates `STATUS.md`; `ITERATIONS.md`

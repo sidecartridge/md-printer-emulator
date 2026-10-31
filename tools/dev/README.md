@@ -4,6 +4,15 @@ Host-side tools for working on this microfirmware with the hardware attached: a 
 Multi-device on an Atari ST, with a Raspberry Pi Debug Probe wired to the RP2040's SWD pins and to
 its debug UART (GPIO 0/1). Python tools use the standard library only.
 
+The other bench, the firmware in emumd's Hatari with no hardware (`emu_harness.py`, the floppy and
+ACSI image scripts, `st/`), is described in `emu/README.md`. It shows the logic, the setup menu and
+the ST side on three machines in seconds; it cannot show timing, the bus, USB or SELECT, which only
+these tools on the device can.
+
+```sh
+python3 tools/dev/check_env.py [--emulated | --device]   # ok or FAIL for everything both benches need
+```
+
 ## Firmware support these tools rely on
 
 - Debug builds run the console at 921,600 baud (`PICO_DEFAULT_UART_BAUD_RATE` in
@@ -193,7 +202,10 @@ RP, with code addresses resolved to source lines by `addr2line`.
 `postmortem` halts the RP and prints both cores' backtraces, the registers, the watchdog registers
 and key variables through GDB (`$ARM_GDB_PATH/bin/arm-none-eabi-gdb`, as in `.vscode/launch.json`),
 then resumes it; `--leave-halted` keeps it stopped for `swd.py resume`. Halting stops the
-cartridge bus, so the ST sees a dead cartridge until the RP resumes.
+cartridge bus, so the ST sees a dead cartridge until the RP resumes. After a `postmortem` the RP
+keeps running its main loop, but until a chip reset (`swd.py reset`) SWD reads of the flash return
+zeros (`verify` fails, `build-id` finds none) and SELECT presses go unseen: measured on a Pico W
+after `tools_harness.py`, whose `--reset` is there for this. Reset before `select_harness.py`.
 
 `heap` reads newlib's own malloc state while the RP keeps running, so it needs no firmware code
 and works on release builds. It prints the heap's size (from the end of `.bss` to
