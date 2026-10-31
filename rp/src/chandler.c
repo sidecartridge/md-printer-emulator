@@ -61,7 +61,7 @@ static uint32_t chandlerAnsweredAtUs = 0;
 // Address of the random-token reply slot (chandler_loop publishes the
 // 64-bit { incrementalCmdCount | randomToken } value here so the m68k's
 // send_sync poll wakes up).
-static uint32_t memoryRandomTokenAddress = 0;
+static uintptr_t memoryRandomTokenAddress = 0;
 
 // Head of the callback list and current count (capped at
 // CHANDLER_MAX_CALLBACKS).
@@ -94,7 +94,7 @@ static inline bool __not_in_flash_func(chandler_protocol_matches_pending)(
 void __not_in_flash_func(chandler_init)() {
   DPRINTF("Initializing Command Handler...\n");
 
-  uint32_t shared_base = (unsigned int)&__rom_in_ram_start__;
+  uintptr_t shared_base = (uintptr_t)&__rom_in_ram_start__;
   memoryRandomTokenAddress = shared_base + CHANDLER_RANDOM_TOKEN_OFFSET;
 
   // Seed the random-token slots with non-zero values before the first
@@ -278,7 +278,7 @@ void __not_in_flash_func(chandler_loop)() {
     TPROTO_NEXT32_PAYLOAD_PTR(payloadPtr);
     uint32_t value = TPROTO_GET_PAYLOAD_PARAM32(payloadPtr);
     if (index < CHANDLER_SHARED_VARIABLES_SLOTS) {
-      SET_SHARED_VAR(index, value, (uint32_t)&__rom_in_ram_start__,
+      SET_SHARED_VAR(index, value, (uintptr_t)&__rom_in_ram_start__,
                      CHANDLER_SHARED_VARIABLES_OFFSET);
       sharedVarSetPending = true;
     } else {

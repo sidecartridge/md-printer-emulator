@@ -272,7 +272,7 @@ static inline uint32_t memfunc_readAndSwapLongword(
   do {                                                                       \
     DPRINTF("Setting bit %d of private shared variable %d\n", bit_position,  \
             p_shared_variable_index);                                        \
-    uint32_t addr = memory_shared_address + memory_shared_variables_offset + \
+    uintptr_t addr = memory_shared_address + memory_shared_variables_offset + \
                     (p_shared_variable_index * 4);                           \
     uint32_t value = *((volatile uint16_t *)(addr + 2)) |                    \
                      (*((volatile uint16_t *)(addr)) << 16);                 \
@@ -300,7 +300,7 @@ static inline uint32_t memfunc_readAndSwapLongword(
   do {                                                                       \
     DPRINTF("Clearing bit %d of private shared variable %d\n", bit_position, \
             p_shared_variable_index);                                        \
-    uint32_t addr = memory_shared_address + memory_shared_variables_offset + \
+    uintptr_t addr = memory_shared_address + memory_shared_variables_offset + \
                     (p_shared_variable_index * 4);                           \
     uint32_t value = *((volatile uint16_t *)(addr + 2)) |                    \
                      (*((volatile uint16_t *)(addr)) << 16);                 \

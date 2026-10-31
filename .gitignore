@@ -71,3 +71,7 @@ tools/dev/logs/
 tools/dev/builds/
 *.pyc
 __pycache__/
+
+# EmuMD: the emulated microSD card and the TOS images linked from elsewhere
+emu/sd/
+emu/tos/

@@ -164,9 +164,9 @@ static void atariLine(char *line, size_t size) {
   uint32_t machine = 0;
   uint32_t versions = 0;
   GET_SHARED_VAR(CHANDLER_HARDWARE_TYPE, &machine,
-                 (uint32_t)&__rom_in_ram_start__,
+                 (uintptr_t)&__rom_in_ram_start__,
                  CHANDLER_SHARED_VARIABLES_OFFSET);
-  GET_SHARED_VAR(CHANDLER_SVERSION, &versions, (uint32_t)&__rom_in_ram_start__,
+  GET_SHARED_VAR(CHANDLER_SVERSION, &versions, (uintptr_t)&__rom_in_ram_start__,
                  CHANDLER_SHARED_VARIABLES_OFFSET);
   const char *name = NULL;
   switch (machine) {

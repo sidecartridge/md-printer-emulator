@@ -227,12 +227,18 @@ static inline void __not_in_flash_func(tprotocol_parse)(
       // Store the 16-bit chunk into the payload array. "l": Thumb-1's strh
       // takes only r0-r7. With "r" a Release build with DEBUG_MODE=1 got ip
       // and did not assemble ("lo register required").
+#if defined(__arm__)
       asm("strh %0, [%1]"
           :
           : "l"(data),
             "l"(&tprotocol_transmission
                      .payload[(tprotocol_transmission.bytes_read / 2)])
           : "memory");
+#else
+      // The host build (emumd): the same 16-bit store, in C.
+      tprotocol_transmission.payload[tprotocol_transmission.bytes_read / 2] =
+          data;
+#endif
       tprotocol_transmission.bytes_read += 2;
       if (tprotocol_transmission.bytes_read >=
           tprotocol_transmission.payload_size) {
