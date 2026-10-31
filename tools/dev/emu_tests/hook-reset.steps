@@ -1,0 +1,21 @@
+# The hook at every boot: TOS sets its vectors again at a reset, and the
+# user firmware (the sentinel keeps CMD_START) installs the hook again in a
+# block the pre-GEMDOS init has cleared and stamped again. After a warm reset
+# the vectors point into the block once more and its counters start at 0.
+@printer
+@disk-a tools/dev/builds/disks/autotest.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+screen same autotest 1500
+hookstate first
+reset warm
+newlog "Setting shared variable 1 to" 1500
+wait 100
+key 0x01
+screen same autotest 1500
+hookstate again
+key 0x39
+desktop 2500

@@ -24,6 +24,7 @@
 #include "memfunc.h"
 #include "network.h"
 #include "pico/stdlib.h"
+#include "printer.h"
 #include "reset.h"
 #include "romemul.h"
 #include "sdcard.h"
@@ -481,6 +482,11 @@ void emul_start() {
   }
   chandler_init();
   chandler_addCB(term_command_cb);
+  // The ST's printer hook takes what programs print only with this set;
+  // otherwise it hands every call to TOS's own routine (printer.h).
+  SET_SHARED_VAR(PRINTER_SVAR_ENABLED, PRINTER_ENABLED,
+                 (uintptr_t)&__rom_in_ram_start__,
+                 CHANDLER_SHARED_VARIABLES_OFFSET);
 
   // After this point, the remote computer can execute the code
 

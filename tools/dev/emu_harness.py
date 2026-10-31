@@ -63,6 +63,11 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         on, by caller: from ROM to within 63, from RAM exactly,
                         next to the printer port's bytes in report.json (not
                         with the firmware: a breakpoint slows every byte)
+  hookstate [NAME]      the printer hook's RAM block (below _membot): saved as
+                        NAME.bin, its counters and buffer in the report; FAILs
+                        unless the four printer vectors point into it
+  svar INDEX VALUE      shared variable INDEX becomes VALUE (hex), as the
+                        firmware writes it (fork only)
   rom4 NAME             the 64 KB cartridge window, NAME.bin (fork only)
   reset warm|cold       reset the ST (a cold reset power-cycles the
                         Multi-device too; a warm one leaves it running)
@@ -301,6 +306,7 @@ class Run:
         self.start = time.time()
         self.shot_count = 0
         self.pointer = None  # where the pointer is, once pinned
+        self.report_extra = {}  # what steps add to report.json
         tos = (ROOT / SETUPS[args.setup][1]).read_bytes()[0x1C:0x1E]
         self.tos_country = int.from_bytes(tos, "big") >> 1  # os_conf's country
     def frames_from_now(self, frames):
@@ -526,6 +532,52 @@ class Run:
         result["port_bytes"] = out.stat().st_size if out.exists() else 0
         return result
 
+    def read_mem(self, address, length):
+        """ST memory, through the debugger's savebin."""
+        path = self.run_dir / "requests" / f"mem-{address:06x}-{length}.bin"
+        path.unlink(missing_ok=True)
+        self.hatari.send(f"hatari-debug savebin {path} ${address:x} ${length:x}")
+        self.wait_for(100, lambda: path.exists() and path.stat().st_size == length,
+                      f"{length} bytes at ${address:06x}")
+        return path.read_bytes()
+
+    def step_hookstate(self, name="hookstate"):
+        """The printer hook's RAM block (inc/printer_layout.s): found below
+        _membot by its stamp, saved as NAME.bin, its counters and buffer in
+        the report; FAILs unless the four vectors point into its
+        trampolines."""
+        size, tramp, tramp_size, code = 2048, 32, 24, 12
+        membot = int.from_bytes(self.read_mem(0x432, 4), "big")
+        base = membot - size
+        block = self.read_mem(base, size)
+        (self.run_dir / f"{name}.bin").write_bytes(block)
+        word = lambda o: int.from_bytes(block[o:o + 4], "big")
+        state = {"block": f"${base:06x}", "stamp": block[:4] == b"MDPR" and word(4) == base,
+                 "taken": word(8), "dropped": word(12), "buffered": word(16)}
+        vectors = {"xconout0": 0x57E, "xcostat0": 0x55E, "prv_lst": 0x50A, "prv_lsto": 0x506}
+        for i, (vname, vaddr) in enumerate(vectors.items()):
+            value = int.from_bytes(self.read_mem(vaddr, 4), "big")
+            entry = base + tramp + i * tramp_size + code
+            old = word(tramp + i * tramp_size + 8)
+            state[vname] = {"vector": f"${value:06x}", "hooked": value == entry,
+                            "xbra": block[tramp + i * tramp_size:tramp + i * tramp_size + 8] == b"XBRAMDPR",
+                            "previous": f"${old:06x}"}
+        state["buffer"] = block[256:256 + min(word(16), 1024)].decode("latin1")
+        self.report_extra[name] = state
+        (self.run_dir / f"{name}.json").write_text(json.dumps(state, indent=2) + "\n")
+        if not state["stamp"] or not all(state[v]["hooked"] and state[v]["xbra"] for v in vectors):
+            raise StepFailed(f"the printer hook is not installed: {json.dumps(state)[:300]}")
+
+    def step_svar(self, index, value):
+        """Shared variable INDEX (hex) becomes VALUE (hex), as the firmware
+        writes it (emu/template_extra.c's svar request)."""
+        self.need_fork("svar")
+        done = self.run_dir / "requests" / "svar.done"
+        done.unlink(missing_ok=True)
+        (self.run_dir / "requests" / "svar.req.tmp").write_text(f"{index} {value}\n")
+        os.replace(self.run_dir / "requests" / "svar.req.tmp", self.run_dir / "requests" / "svar.req")
+        self.wait_for(100, lambda: done.exists(), "the firmware's answer to svar")
+
     def step_rom4(self, name):
         shutil.copy(self.request("rom4", "rom4.bin"), self.run_dir / f"{name}.bin")
 
@@ -713,6 +765,7 @@ def main():
     if args.acsi:
         report["acsi_files"] = acsi_files(run_dir / Path(args.acsi).name, run_dir / "acsi-files")
         print(f"  ACSI image's files in acsi-files/: {report['acsi_files']}")
+    report.update(run.report_extra)
     watch = run.printwatch_counts()
     if watch:
         report["printwatch"] = watch

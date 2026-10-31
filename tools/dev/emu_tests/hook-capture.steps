@@ -1,0 +1,29 @@
+# The printer hook in the firmware: [F]irmware installs it (the user
+# firmware's message), TOS goes on to run PRPATHS from the floppy's AUTO
+# folder, and its four print paths and the screen dump go into the hook's RAM
+# buffer instead of the printer port (Hatari's printer port gets nothing);
+# then the desktop.
+@printer
+@disk-a tools/dev/builds/disks/prpaths.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+shot prpaths
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 300
+shot done
+hookstate
+# PRPATHS ends on a key, and TOS goes on to its desktop
+key 0x39
+desktop 2500

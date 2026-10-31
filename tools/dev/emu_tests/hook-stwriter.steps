@@ -1,0 +1,22 @@
+# A GEM program printing into the hook: ST Writer Elite (as print-stwriter)
+# after [F]irmware has installed the hook. Its 1,324 bytes go to the hook,
+# none to the printer port; the 1 KB buffer keeps the first 1,024.
+@printer
+@disk-a tools/dev/builds/launchers/stwriter.st
+@disk-b $PROGRAM_DISKS/st_writer_elite_4_0/files/st_writer_elite_atari_(usa).st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 1300
+key l
+wait 150
+type template.txt
+key 0x1c
+wait 200
+key p
+wait 150
+key 0x1c
+wait 500
+hookstate

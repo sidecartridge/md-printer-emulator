@@ -1,57 +1,139 @@
-; User firmware module
+; User firmware module: the printer hook
 ; (C) 2026 by Diego Parrilla
 ; License: GPL v3
 ;
-; This module is the m68k-side "user firmware" that main.s hands control
-; to once the RP signals CMD_START via the cartridge sentinel. The
-; cartridge image places this file at offset $0800 (USERFW = $FA0800);
-; main.s reaches it through `rom_function: jmp USERFW`. It runs from the
-; cartridge, and is linked at offset $0800 rather than at $FA0800, so
-; everything in it must be PC-relative (`lea label(pc), a0`).
+; main.s hands control here (rom_function: jmp USERFW) once the RP signals
+; CMD_START, at every boot; this module runs from the cartridge at $FA0800 and
+; is linked at offset $0800, so everything in it is PC-relative.
 ;
-; Replace this body with whatever your app needs to run on the Atari ST
-; side. Everything needed to talk to the RP is included below:
+; It installs the printer hook and returns to TOS. Every way a program prints
+; through TOS ends in four system vectors (measured on TOS 1.04, 1.62 and
+; 2.06): the BIOS printer device's output and status, xconout[0] and
+; xcostat[0], which GEMDOS's Cprnout and Fwrite to PRN: also reach, and the
+; screen dump's own, prv_lst and prv_lsto (Alt-Help, XBIOS Scrdmp). Each
+; vector is pointed at an XBRA trampoline in the RAM block main.s reserved
+; before GEMDOS started (inc/printer_layout.s); the trampoline loads the
+; block's address into a0 and jumps to the hook below, in the cartridge.
+; The trampolines are the only code in RAM: XBRA keeps the previous vector
+; next to the entry point, which the cartridge cannot hold.
 ;
-;   inc/sidecart_layout.s     the cartridge window (RANDOM_TOKEN_ADDR,
-;                             SHARED_VARIABLES, APP_BUFFERS_ADDR, ...) and
-;                             the command channel
-;   inc/sidecart_macros.s     send_sync / send_write_sync, and at its top
-;                             what a send keeps and what it destroys
-;   inc/sidecart_functions.s  the senders themselves (at the end of this
-;                             file, followed by the NOP tail)
+; The hook: status answers ready (-1); output takes the byte at 6(sp), as
+; TOS's own routine does, into the block's buffer (counting what the buffer
+; has no room for) and answers -1. Until the RP turns the printer on (shared
+; variable PRT_SVAR_ENABLED), both hand every call to the routine they
+; replaced, so the ST prints as without the cartridge.
 ;
-; A send is `send_sync <command>, <payload bytes>` with the payload in
-; d3-d6; the RP answers with d0 = 0 and Z set. On a Mega STE, wrap each
-; send in megaste_cache_off / megaste_cache_back.
-;
-; Demo: this stub prints "Example firmware load..." to the GEMDOS
-; console (which lands on the Atari ST screen) and returns. The
-; cartridge is reached after GEMDOS init (CA_INIT bit 27 set in
-; main.s's header), so the Cconws trap is safe to use here.
+; Machines: ST, STE, Mega ST, Mega STE (68000). A 68030 would need its
+; instruction cache cleared after the trampolines are written.
 
 	include inc/sidecart_layout.s
+	include inc/printer_layout.s
 	include inc/sidecart_macros.s
 	include inc/tos.s
 
 	section text
 
-; GEMDOS Cconws: print null-terminated string to console.
-;   trap #1, function 9 (.w on stack), string ptr (.l on stack).
 GEMDOS_Cconws		equ 9
 
+; install_trampoline INDEX, VECTOR, HOOK: trampoline INDEX of the block at a0
+; takes over VECTOR (a system variable) and jumps to HOOK.
+install_trampoline	macro
+	move.l #$58425241, (PRT_TRAMP+(\1*PRT_TRAMP_SIZE),a0)		; 'XBRA'
+	move.l #PRT_XBRA_ID, (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+4,a0)
+	move.l \2.w, (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+PRT_TRAMP_OLD,a0)
+	move.w #$41FA, (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+12,a0)		; lea d16(pc),a0
+	move.w #-(PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+14), (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+14,a0)
+	move.w #$4EF9, (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+16,a0)		; jmp abs.l
+	lea \3(pc), a1
+	move.l a1, (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+18,a0)
+	lea (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+PRT_TRAMP_CODE,a0), a1
+	move.l a1, \2.w							; the vector, last
+	endm
+
 userfw:
-	lea	hello_msg(pc), a0	; address of message
-	move.l	a0, -(sp)		; push string pointer
-	move.w	#GEMDOS_Cconws, -(sp)	; push function code
-	trap	#1			; call GEMDOS
-	addq.l	#6, sp			; clean up arguments
+	move.l _membot_var.w, d0				; the block main.s reserved
+	sub.l #PRT_RAM_BYTES, d0
+	move.l d0, a0
+	cmp.l #PRT_MAGIC, (a0)
+	bne .no_block
+	cmpa.l PRT_SELF(a0), a0
+	bne .no_block
+	install_trampoline PRT_T_CONOUT, xconout0, prt_conout
+	install_trampoline PRT_T_COSTAT, xcostat0, prt_costat
+	install_trampoline PRT_T_LST, prv_lst, prt_lst
+	install_trampoline PRT_T_LSTO, prv_lsto, prt_lsto
+	lea installed_msg(pc), a0
+	bra.s .say
+.no_block:
+	lea no_block_msg(pc), a0
+.say:
+	move.l a0, -(sp)
+	move.w #GEMDOS_Cconws, -(sp)
+	trap #1
+	addq.l #6, sp
 	rts
 
-hello_msg:
-	; ESC E = VT52 clear screen + home cursor
-	dc.b	27,"E"
-	dc.b	"Example firmware load..."
-	dc.b	0,255
+; The hook. TOS calls these as its own printer routines: the byte at 6(sp),
+; d0 the answer, d0-d2 and a0-a2 free. The trampoline has put the block's
+; address in a0.
+
+; take_byte: the byte into the buffer, or counted as dropped; answers -1.
+take_byte	macro
+	move.l (PRT_WIDX,a0), d0
+	cmp.l #PRT_BUF_SIZE, d0
+	bhs.s .\@full
+	lea (PRT_BUF,a0), a1
+	move.b 7(sp), (a1,d0.l)
+	addq.l #1, (PRT_WIDX,a0)
+	addq.l #1, (PRT_TAKEN,a0)
+	moveq #-1, d0
+	rts
+.\@full:
+	addq.l #1, (PRT_DROPPED,a0)
+	moveq #-1, d0
+	rts
+	endm
+
+; chain INDEX: the call to the routine trampoline INDEX replaced.
+chain		macro
+	move.l (PRT_TRAMP+(\1*PRT_TRAMP_SIZE)+PRT_TRAMP_OLD,a0), a0
+	jmp (a0)
+	endm
+
+prt_conout:
+	cmp.l #PRT_ENABLED, PRT_SVAR_ENABLED_ADDR
+	bne.s .off
+	take_byte
+.off:
+	chain PRT_T_CONOUT
+
+prt_lst:
+	cmp.l #PRT_ENABLED, PRT_SVAR_ENABLED_ADDR
+	bne.s .off
+	take_byte
+.off:
+	chain PRT_T_LST
+
+prt_costat:
+	cmp.l #PRT_ENABLED, PRT_SVAR_ENABLED_ADDR
+	bne.s .off
+	moveq #-1, d0
+	rts
+.off:
+	chain PRT_T_COSTAT
+
+prt_lsto:
+	cmp.l #PRT_ENABLED, PRT_SVAR_ENABLED_ADDR
+	bne.s .off
+	moveq #-1, d0
+	rts
+.off:
+	chain PRT_T_LSTO
+
+installed_msg:
+	dc.b	27,"E","MD printer emulator: hook installed",13,10,0
+no_block_msg:
+	dc.b	27,"E","MD printer emulator: no RAM, no printer",13,10,0
 	even
 
 	include "inc/sidecart_functions.s"
@@ -68,4 +150,3 @@ hello_msg:
 	nop
 	nop
 userfw_end:
-		

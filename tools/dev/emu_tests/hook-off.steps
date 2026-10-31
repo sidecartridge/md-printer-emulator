@@ -1,0 +1,26 @@
+# The printer hook switched off (shared variable 2 cleared after the firmware
+# set it): the hook hands every call to TOS's routine, so PRPATHS' output
+# reaches the printer port as without the cartridge; the hook takes nothing.
+@printer
+@disk-a tools/dev/builds/disks/prpaths.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+svar 2 0
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+shot prpaths
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 150
+key 0x39
+wait 300
+shot done
+hookstate
+printer 4000 3000

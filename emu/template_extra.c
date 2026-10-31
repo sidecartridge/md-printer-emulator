@@ -15,6 +15,9 @@
  *                the cursor).
  *      rom4.req  writes rom4.bin: the 64 KB cartridge window as the ST reads
  *                it at $FA0000 (big-endian words).
+ *      svar.req  holds "INDEX VALUE" (hex): shared variable INDEX becomes
+ *                VALUE, as the firmware's SET_SHARED_VAR writes it; answers
+ *                svar.done. A test's way to flip a switch the firmware sets.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,6 +26,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "chandler.h"
 #include "display.h"
 #include "display_term.h"
 #include "mdfw.h"
@@ -140,6 +144,26 @@ static void writeRom4(const char *path) {
   fclose(f);
 }
 
+static const char *requestDir;
+
+static void writeSharedVar(const char *path) {
+  char req[1024];
+  snprintf(req, sizeof(req), "%s/svar.req", requestDir);
+  unsigned int index = 0, value = 0;
+  FILE *f = fopen(req, "r");
+  if (!f) return;
+  int n = fscanf(f, "%x %x", &index, &value);
+  fclose(f);
+  if (n == 2 && index < CHANDLER_SHARED_VARIABLES_SLOTS) {
+    uint16_t *rom4 = mdfw_rom4();
+    unsigned int word = (CHANDLER_SHARED_VARIABLES_OFFSET + index * 4) / 2;
+    rom4[word] = (uint16_t)(value >> 16);
+    rom4[word + 1] = (uint16_t)value;
+  }
+  FILE *done = fopen(path, "w");
+  if (done) fclose(done);
+}
+
 /* Answers one request: writes its answer under a temporary name, renames it,
  * then deletes the request, so the harness never reads half an answer. */
 static void answer(const char *dir, const char *name, const char *out,
@@ -160,6 +184,7 @@ void select_poll(void) {
   static uint64_t next;
   if (!checked) {
     dir = getenv("EMU_REQUESTS");
+    requestDir = dir;
     checked = true;
   }
   if (!dir) return;
@@ -168,4 +193,5 @@ void select_poll(void) {
   next = now + REQUEST_POLL_US;
   answer(dir, "text.req", "text.txt", writeText);
   answer(dir, "rom4.req", "rom4.bin", writeRom4);
+  answer(dir, "svar.req", "svar.done", writeSharedVar);
 }
