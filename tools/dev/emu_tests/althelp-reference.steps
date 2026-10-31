@@ -1,0 +1,17 @@
+# The reference for the printer: Alt-Help's screen dump of the desktop, as
+# stock Hatari's printer port receives it (printer.out in the run folder). No
+# cartridge: this is what the ST sends to a real printer. The AUTO test
+# program holds the boot until Space (it drops the ESC sent for a Mega STE's
+# memory test on other machines).
+@hatari stock
+@printer
+@disk-a tools/dev/builds/disks/autotest.st
+wait 100
+key 0x01
+screen same autotest 1500
+key 0x39
+desktop 2500
+keydown 0x38
+key 0x62
+keyup 0x38
+printer 1000 4000

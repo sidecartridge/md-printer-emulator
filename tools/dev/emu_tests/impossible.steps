@@ -1,0 +1,3 @@
+# Must FAIL: text the menu never shows. Checks that the harness can fail.
+text "Select an option" 1000
+text "THIS TEXT IS NEVER ON THE SCREEN" 200

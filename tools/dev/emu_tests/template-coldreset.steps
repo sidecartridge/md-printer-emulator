@@ -1,0 +1,15 @@
+# A cold reset powers the Multi-device off and on with the ST (emumd): the RP
+# boots again and shows the setup menu, even after [F]irmware, and the ST says
+# hello once more; it boots once, not in a loop (two hellos only, checked by
+# the harness's caller from hatari.out).
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+screen same userfw 300
+reset cold
+newlog "Cartridge image in RAM verified" 500
+newlog "Setting shared variable 1 to" 1500
+text "Select an option" 500
+text "Atari +: (ST|STE|Mega STE), TOS" 500
+wait 500
+shot after

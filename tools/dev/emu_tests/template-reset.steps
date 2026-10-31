@@ -1,0 +1,17 @@
+# An ST warm reset before the user firmware runs: the menu again, after a new
+# hello. After [F]irmware the sentinel keeps CMD_START, so a reset runs the
+# user firmware again, as an app's emulation mode does, and only once per
+# reset (an endless reset loop would show the user firmware's screen come and
+# go: the screen is checked twice, 250 frames apart).
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+reset warm
+newlog "Setting shared variable 1 to" 1500
+text "Select an option" 500
+key f
+key 0x1c
+screen same userfw 300
+reset warm
+newlog "Setting shared variable 1 to" 1500
+screen same userfw 500
+wait 250
+screen same userfw 50

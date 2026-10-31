@@ -1,0 +1,13 @@
+# A program in the floppy's AUTO folder runs at boot (it waits for a key) after the cartridge's
+# setup menu hands over ([E]xit), and TOS reaches the desktop. The disk comes
+# from tools/dev/make_bench_disks.sh. A Mega STE's memory test is cut short
+# with ESC.
+@disk-a tools/dev/builds/disks/autotest.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key e
+key 0x1c
+wait 100
+key 0x01
+screen same autotest 1500
+key 0x39
+desktop 2500
