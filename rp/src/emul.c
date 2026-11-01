@@ -634,7 +634,9 @@ void emul_start() {
     printer_loop();
     if (chandler_consumeStBoot()) {
       // A new ST session: nothing typed before the reset carries over, and
-      // the ST gets a freshly drawn menu.
+      // the ST gets a freshly drawn menu; its printer blocks are numbered
+      // afresh.
+      printer_stBooted();
       term_clearInputBuffer();
       if (menuScreenActive) {
         menu();

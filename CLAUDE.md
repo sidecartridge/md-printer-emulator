@@ -149,7 +149,8 @@ What a program prints on the ST becomes bytes on the RP:
   after `chandler_init()`; without it the hook hands every call to TOS's routine.
 - **The receiver** (`rp/src/printer.c`): the command callback copies a block into a 32 KB ring
   and returns (the ST is answered at once); `printer_loop()` in the main loop writes the ring to
-  the card. Duplicates (the same number) are dropped and counted.
+  the card. Duplicates (the same number) are dropped and counted; the ST's numbers start over at
+  its every boot, so its hello resets the check.
 
 ### Shared 64 KB cartridge region
 The Atari ST sees a 64 KB window at `$FA0000`–`$FAFFFF` (mirrored RP-side at `0x20030000`). This is the **single source of truth** for any cross-target data layout — both sides derive every offset symbolically from constants in `rp/src/include/chandler.h` (RP-side) and `target/atarist/src/main.s` (m68k side). **Apps must never hard-code an address inside this region** — always reference the named offset/symbol.

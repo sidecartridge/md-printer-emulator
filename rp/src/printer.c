@@ -118,4 +118,6 @@ void printer_loop(void) {
   }
 }
 
+void printer_stBooted(void) { haveSequence = false; }
+
 const PrinterCounters *printer_getCounters(void) { return &counters; }

@@ -65,6 +65,11 @@ void printer_command_cb(TransmissionProtocol *protocol, uint16_t *payloadPtr);
  */
 void printer_loop(void);
 
+/**
+ * @brief The ST has booted again: its block numbers start over.
+ */
+void printer_stBooted(void);
+
 const PrinterCounters *printer_getCounters(void);
 
 #endif  // PRINTER_H
