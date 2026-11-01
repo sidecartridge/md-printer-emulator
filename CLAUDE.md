@@ -139,10 +139,12 @@ What a program prints on the ST becomes bytes on the RP:
   five XBRA trampolines (id `MDPR`), the only code in RAM.
 - **The hook** (`userfw.s`, installed at every boot after `CMD_START`): status answers ready;
   output takes the byte at `6(sp)`; a full buffer goes to the RP at once as `PRT_CMD_BLOCK`
-  (`$0301`: d3 a sequence number, d4 the length, then the bytes; a retry resends the number), and
+  (`$0801`: d3 a sequence number, d4 the length, then the bytes; a retry resends the number), and
   a VBL-queue routine sends the rest after half a second of quiet (TOS 1.04 never calls the
   queue's first slot: the hook takes the last free one). A lock keeps the two apart. The cache of
-  a Mega STE is off around each send.
+  a Mega STE is off around each send. The printer's commands are `$08xx`: the high byte is an
+  app's number, and the other Multi-device apps hold `$00` and `$02`-`$07` (`printer.h` lists
+  them).
 - **The switch**: shared variable 2 = `PRON` (`rp/src/include/printer.h`), written by `emul.c`
   after `chandler_init()`; without it the hook hands every call to TOS's routine.
 - **The receiver** (`rp/src/printer.c`): the command callback copies a block into a 32 KB ring

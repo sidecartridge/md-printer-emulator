@@ -72,4 +72,4 @@ PRT_SVAR_ENABLED_ADDR equ (SHARED_VARIABLES + (PRT_SVAR_ENABLED * 4))
 
 ; The command a block goes in: d3 its sequence number, d4 its length, d5 0,
 ; then the bytes.
-PRT_CMD_BLOCK       equ $0301
+PRT_CMD_BLOCK       equ $0801

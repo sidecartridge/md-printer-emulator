@@ -24,8 +24,12 @@
 #define PRINTER_SVAR_ENABLED 2         // shared variable index
 #define PRINTER_ENABLED 0x50524F4Eu    // 'PRON'
 
-#define PRINTER_CMD_BASE 0x0300        // the printer's commands: 0x03xx
-#define PRINTER_CMD_BLOCK 0x0301
+// The printer's commands: 0x08xx. The high byte is an app's number, and the
+// other Multi-device apps hold 0x00 (the terminal), 0x02-0x07 (floppy, RTC
+// and MIDI, GEMDRIVE, ACSI, pool fix, Mac disk), 0x0D, 0x7F (the template's
+// self-check), 0xFE and 0xFF (chandler).
+#define PRINTER_CMD_BASE 0x0800
+#define PRINTER_CMD_BLOCK 0x0801
 #define PRINTER_BLOCK_MAX 1024
 #define PRINTER_BLOCK_PARAMS_BYTES 16  // the token and d3-d5, before the bytes
 
