@@ -1,7 +1,7 @@
-# The hook at every boot: TOS sets its vectors again at a reset, and the
-# user firmware (the sentinel keeps CMD_START) installs the hook again in a
-# block the pre-GEMDOS init has cleared and stamped again. After a warm reset
-# the vectors point into the block once more and its counters start at 0.
+# The hook at every boot: TOS sets its vectors again at a reset and starts
+# GEMDOS's memory afresh, and the user firmware (the sentinel keeps
+# CMD_START) installs the hook again, in memory it takes anew. After a
+# warm reset the vectors reach it once more and its counters start at 0.
 @printer
 @disk-a tools/dev/builds/disks/autotest.st
 text "Atari +: (ST|STE|Mega STE), TOS" 1500

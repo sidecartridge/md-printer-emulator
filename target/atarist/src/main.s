@@ -52,7 +52,6 @@ APP_TERMINAL_KEYSTROKE 		equ $1 ; Keystroke command
 ; The cartridge window's layout and the command channel, shared with every
 ; module that talks to the RP.
 	include inc/sidecart_layout.s
-	include inc/printer_layout.s
 
 	include inc/sidecart_macros.s
 	include inc/tos.s
@@ -167,7 +166,8 @@ check_commands		macro
 
 	dc.l $abcdef42 					; magic number
 first:
-	dc.l printer_header				; CA_NEXT: the printer's RAM, before GEMDOS
+;	dc.l second
+	dc.l 0
 	dc.l $08000000 + pre_auto		; After GEMDOS init (before booting from disks)
 	dc.l 0
 	dc.w GEMDOS_TIME 				;time
@@ -373,47 +373,3 @@ end_rom_code:
 end_pre_auto:
 	even
 	dc.l 0
-
-; ---------------------------------------------------------------------------
-; Second cartridge header: the printer hook's RAM. TOS calls it with CA_INIT
-; bit 26 (the hardware set up, before GEMDOS starts), so raising _membot here
-; keeps the block out of GEMDOS's free memory for the whole session. The
-; block is cleared and stamped at every boot; userfw.s finds it at
-; _membot - PRT_RAM_BYTES and installs the hook in it (inc/printer_layout.s).
-; It runs from the cartridge, outside the code main.s copies to RAM.
-; ---------------------------------------------------------------------------
-printer_header:
-	dc.l 0								; CA_NEXT: the last one
-	dc.l $04000000 + printer_reserve	; CA_INIT: bit 26 only
-	dc.l 0								; CA_RUN
-	dc.w GEMDOS_TIME
-	dc.w GEMDOS_DATE
-	dc.l end_printer_reserve - printer_reserve
-	dc.b "PRINTER",0
-	even
-
-printer_reserve:
-	movem.l d0-d1/a0-a1, -(sp)
-	move.l _membot_var.w, d0
-	beq.s .printer_reserve_done
-	move.l _memtop_var.w, d1			; at least 64 KB must be left above
-	sub.l d0, d1
-	cmp.l #(PRT_RAM_BYTES + $10000), d1
-	bls.s .printer_reserve_done
-	addq.l #3, d0						; the block long-aligned
-	and.l #$FFFFFFFC, d0
-	move.l d0, a0
-	move.l a0, a1
-	move.w #((PRT_RAM_BYTES / 4) - 1), d1	; what an earlier session left here
-.printer_reserve_clear:					; is not ours to keep
-	clr.l (a1)+
-	dbf d1, .printer_reserve_clear
-	move.l #PRT_MAGIC, (a0)
-	move.l a0, PRT_SELF(a0)				; a stamp left elsewhere cannot pass
-	add.l #PRT_RAM_BYTES, d0
-	move.l d0, _membot_var.w
-.printer_reserve_done:
-	movem.l (sp)+, d0-d1/a0-a1
-	rts
-end_printer_reserve:
-	even

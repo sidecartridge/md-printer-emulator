@@ -66,9 +66,10 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         on, by caller: from ROM to within 63, from RAM exactly,
                         next to the printer port's bytes in report.json (not
                         with the firmware: a breakpoint slows every byte)
-  hookstate [NAME]      the printer hook's RAM block (below _membot): saved as
-                        NAME.bin, its counters and buffer in the report; FAILs
-                        unless the four printer vectors point into it
+  hookstate [NAME]      the printer hook, resident (found from xconout[0]):
+                        its state saved as NAME.bin, its counters and buffer
+                        in the report; FAILs unless the four printer vectors
+                        and a VBL slot reach it
   svar INDEX VALUE      shared variable INDEX becomes VALUE (hex), as the
                         firmware writes it (fork only)
   cardfile PATTERN NBYTES FRAMES [QUIET]
@@ -83,6 +84,10 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
   cardput PATH          an empty file PATH on the card (a file where the
                         firmware wants a folder: the card fails for it)
   cardnone PATTERN      FAILs if a file on the card matches PATTERN
+  cartexec watch|none   watch for the CPU running code in the cartridge
+                        ($FA0000-$FAFFFF), then FAIL if it has since then,
+                        with the registers at the first time (the hook runs
+                        from RAM: an RP restart leaves no code to run there)
   rom4 NAME             the 64 KB cartridge window, NAME.bin (fork only)
   reset warm|cold       reset the ST (a cold reset power-cycles the
                         Multi-device too; a warm one leaves it running)
@@ -137,7 +142,7 @@ SETUPS = {"st-104": ("st", "emu/tos/tos104uk.img"),
 
 def read_layout(path):
     """The plain numbers a vasm include defines ("NAME equ 12", "equ $4D"):
-    the printer hook's RAM block, as the ST builds it."""
+    the printer hook's layout, as the ST builds it."""
     layout = {}
     for line in path.read_text().splitlines():
         m = re.match(r"(\w+)\s+equ\s+(\$[0-9A-Fa-f]+|\d+)\s*(?:;.*)?$", line)
@@ -581,45 +586,67 @@ class Run:
                       f"{length} bytes at ${address:06x}")
         return path.read_bytes()
 
+    def xbra_entry(self, vector):
+        """The routine of the printer hook in the XBRA chain from VECTOR (a
+        system variable), or None: each routine follows 'XBRA', its id and
+        the vector it replaced."""
+        entry = int.from_bytes(self.read_mem(vector, 4), "big")
+        for _ in range(16):
+            if not entry:
+                return None
+            header = self.read_mem(entry - 12, 12)
+            if header[:4] != b"XBRA":
+                return None
+            if int.from_bytes(header[4:8], "big") == PRT["PRT_XBRA_ID"]:
+                return entry
+            entry = int.from_bytes(header[8:12], "big")
+        return None
+
     def hook_base(self):
-        """The printer hook's RAM block: just below _membot."""
-        return int.from_bytes(self.read_mem(PRT["_membot_var"], 4), "big") - PRT["PRT_RAM_BYTES"]
+        """The printer hook's state: its output routine, which xconout[0]
+        reaches, is PRT_CONOUT_ENTRY bytes in (inc/printer_layout.s)."""
+        entry = self.xbra_entry(PRT["xconout0"])
+        if entry is None:
+            raise StepFailed("the printer hook is not in xconout[0]'s XBRA chain")
+        return entry - PRT["PRT_CONOUT_ENTRY"]
 
     def step_hookstate(self, name="hookstate"):
-        """The printer hook's RAM block (inc/printer_layout.s): found below
-        _membot by its stamp, saved as NAME.bin, its counters and buffer in
-        the report; FAILs unless the four vectors point into its
-        trampolines."""
+        """The printer hook, resident (inc/printer_layout.s): found from
+        xconout[0], its state saved as NAME.bin, its counters and buffer in
+        the report; FAILs unless the four vectors and a VBL slot reach its
+        routines."""
         base = self.hook_base()
-        block = self.read_mem(base, PRT["PRT_RAM_BYTES"])
+        block = self.read_mem(base, PRT["PRT_STATE_BYTES"])
         (self.run_dir / f"{name}.bin").write_bytes(block)
         word = lambda o: int.from_bytes(block[o:o + 4], "big")
-        state = {"block": f"${base:06x}",
+        state = {"state": f"${base:06x}",
                  "stamp": word(0) == PRT["PRT_MAGIC"] and word(PRT["PRT_SELF"]) == base,
                  "taken": word(PRT["PRT_TAKEN"]), "dropped": word(PRT["PRT_DROPPED"]),
                  "buffered": word(PRT["PRT_WIDX"]), "sequence": word(PRT["PRT_SEQ"]),
-                 "sent": word(PRT["PRT_SENT"]), "failed": word(PRT["PRT_FAILED"])}
-        tramp = lambda t: PRT["PRT_TRAMP"] + PRT[t] * PRT["PRT_TRAMP_SIZE"]
-        vectors = {"xconout0": "PRT_T_CONOUT", "xcostat0": "PRT_T_COSTAT",
-                   "prv_lst": "PRT_T_LST", "prv_lsto": "PRT_T_LSTO"}
-        for vname, t in vectors.items():
+                 "sent": word(PRT["PRT_SENT"]), "failed": word(PRT["PRT_FAILED"]),
+                 "machine": f"${word(PRT['PRT_MACHINE']):08x}"}
+        for vname in ("xconout0", "xcostat0", "prv_lst", "prv_lsto"):
             value = int.from_bytes(self.read_mem(PRT[vname], 4), "big")
-            state[vname] = {"vector": f"${value:06x}",
-                            "hooked": value == base + tramp(t) + PRT["PRT_TRAMP_CODE"],
-                            "xbra": word(tramp(t)) == 0x58425241 and word(tramp(t) + 4) == PRT["PRT_XBRA_ID"],
-                            "previous": f"${word(tramp(t) + PRT['PRT_TRAMP_OLD']):06x}"}
+            entry = self.xbra_entry(PRT[vname])
+            state[vname] = {"vector": f"${value:06x}", "hooked": entry is not None}
+            if entry is not None:
+                previous = int.from_bytes(self.read_mem(entry - 4, 4), "big")
+                state[vname]["previous"] = f"${previous:06x}"
         nvbls = int.from_bytes(self.read_mem(PRT["nvbls_var"], 2), "big")
         queue = int.from_bytes(self.read_mem(PRT["vblqueue_var"], 4), "big")
         slots = self.read_mem(queue, nvbls * 4) if queue and nvbls else b""
-        vbl = base + tramp("PRT_T_VBL") + PRT["PRT_TRAMP_CODE"]
+        slots = [int.from_bytes(slots[i:i + 4], "big") for i in range(0, len(slots), 4)]
+        ours = lambda a: a > 12 and self.read_mem(a - 12, 8) == b"XBRA" + PRT["PRT_XBRA_ID"].to_bytes(4, "big")
         state["vbl"] = {"nvbls": nvbls, "queue": f"${queue:06x}",
-                        "slots": [f"${int.from_bytes(slots[i:i + 4], 'big'):06x}" for i in range(0, len(slots), 4)],
-                        "hooked": any(int.from_bytes(slots[i:i + 4], "big") == vbl for i in range(0, len(slots), 4))}
-        buf = PRT["PRT_BUF"]
-        state["buffer"] = block[buf:buf + min(word(PRT["PRT_WIDX"]), PRT["PRT_BUF_SIZE"])].decode("latin1")
+                        "slots": [f"${a:06x}" for a in slots],
+                        "hooked": any(ours(a) for a in slots if a)}
+        buffer = word(PRT["PRT_BUFFER"])
+        held = min(word(PRT["PRT_WIDX"]), PRT["PRT_BUF_SIZE"])
+        state["buffer"] = self.read_mem(buffer, held).decode("latin1") if buffer and held else ""
         self.report_extra[name] = state
         (self.run_dir / f"{name}.json").write_text(json.dumps(state, indent=2) + "\n")
-        if not state["stamp"] or not all(state[v]["hooked"] and state[v]["xbra"] for v in vectors):
+        vectors = ("xconout0", "xcostat0", "prv_lst", "prv_lsto")
+        if not state["stamp"] or not all(state[v]["hooked"] for v in vectors) or not state["vbl"]["hooked"]:
             raise StepFailed(f"the printer hook is not installed: {json.dumps(state)[:300]}")
 
     def step_svar(self, index, value):
@@ -700,6 +727,29 @@ class Run:
         if kind not in ("warm", "cold"):
             raise StepFailed(f"reset {kind}: warm or cold")
         self.hatari.send(f"hatari-shortcut {kind}reset")
+
+    def step_cartexec(self, what):
+        """watch: a breakpoint on the first instruction run in the
+        cartridge, which prints the registers and removes itself; none:
+        FAILs if it has been hit since the watch began."""
+        cond = "pc > $f9ffff && pc < $fb0000"
+        if what == "watch":
+            regs = self.run_dir / "requests" / "cartexec.dbg"
+            regs.write_text("r\n")
+            self.cartexec_mark = len(self.hatari.output())
+            self.hatari.send(f"hatari-debug b {cond} :trace :once :file {regs}")
+            self.wait_frames(2)
+        elif what == "none":
+            self.wait_frames(2)
+            out = self.hatari.output()[self.cartexec_mark:].decode("latin1")
+            hit = re.search(r"breakpoint condition\(s\) matched \d+ times\.\s*\n\s*pc > \$f9ffff.*", out)
+            if hit:
+                # The register dump ends with the instruction at the PC.
+                pc = re.search(r"\nPrefetch [^\n]*\n([0-9a-f]{8}) ", out[hit.start():])
+                where = f" at ${int(pc.group(1), 16):06x}" if pc else ""
+                raise StepFailed(f"the CPU ran code in the cartridge{where}")
+        else:
+            raise StepFailed(f"cartexec {what}: watch or none")
 
     def step_debug(self, *words):
         self.hatari.send("hatari-debug " + " ".join(words))

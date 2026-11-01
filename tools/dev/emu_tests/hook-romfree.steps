@@ -1,0 +1,16 @@
+# Once the printer hook is installed, the ST runs no code in the cartridge:
+# the hook is resident in RAM. An RP that restarts (a reflash, SELECT) stops
+# serving the cartridge, and an ST running code there would crash. Our ESC/P
+# pages (escp.st's AUTO folder) are printed while the watch is on, so the
+# hook's output, its full-buffer sends and its idle flush all run.
+@disk-a tools/dev/builds/disks/escp.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+cartexec watch
+key 0x39
+cardfile PRINTER/*.PRN 2938 3000
+cartexec none

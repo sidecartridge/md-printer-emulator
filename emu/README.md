@@ -80,6 +80,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-escp` | our ESC/P pages reach the RP's card (`PRINTER/00000001.PRN`) byte for byte |
 | `hook-jobs` | each printing is a job, numbered; the number survives a cold reset (the RP's flash) |
 | `hook-nocard` | a card that fails: the ST prints to the end, the RP loses the job and says so |
+| `hook-romfree` | once the hook is installed, the CPU runs no code in the cartridge (it is resident in RAM) |
 | `impossible` | must FAIL: the harness can fail |
 
 `tools/dev/hook_fidelity.sh TEST SETUP` runs a printing test twice on the firmware after

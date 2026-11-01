@@ -133,17 +133,24 @@ What a program prints on the ST becomes bytes on the RP:
   (`$50A`) and `prv_lsto` (`$506`), which Alt-Help calls directly. Programs that drive the
   parallel port's hardware (Calamus 1.x; Signum 3 in its default "Centronics schnell" mode) are
   not caught.
-- **RAM**: a second cartridge header (`main.s`, `CA_INIT` bit 26, before GEMDOS starts) raises
-  `_membot` by 2 KB and stamps the block; `target/atarist/src/inc/printer_layout.s` has its
-  layout. The hook's code stays in the cartridge; the block holds its state, the 1 KB buffer and
-  five XBRA trampolines (id `MDPR`), the only code in RAM.
+- **Resident**: the installer, in the cartridge, copies the hook into RAM it takes with `Malloc`
+  (owned by GEMDOS's initial process, which never ends, as md-drives-emulator's GEMDRIVE takes its
+  stack) and points the vectors at the copy: about 2.2 KB with the 1 KB buffer. A real TSR cannot
+  be made there: `Pexec` and `Ptermres` from the cartridge's bit-27 init crashed TOS 1.04, 1.62
+  and 2.06 later in their boot. Each routine follows its XBRA header (id `MDPR`);
+  `target/atarist/src/inc/printer_layout.s` has the state's layout. Once installed, the ST
+  runs no code in the cartridge, only reads it (the switch, the command channel): an RP that
+  restarts (a reflash, SELECT) stops serving the cartridge, and an ST running code there crashed
+  and rebooted without it, on a real STE. A cartridge that is not there reads as a switch that is
+  off and sends that are never answered. The emulated test `hook-romfree` FAILs if the CPU runs an
+  instruction in `$FA0000`-`$FAFFFF` after the install.
 - **The hook** (`userfw.s`, installed at every boot after `CMD_START`): status answers ready;
   output takes the byte at `6(sp)`; a full buffer goes to the RP at once as `PRT_CMD_BLOCK`
   (`$0801`: d3 a sequence number, d4 the length, then the bytes; a retry resends the number), and
   a VBL-queue routine sends the rest after half a second of quiet (TOS 1.04 never calls the
   queue's first slot: the hook takes the last free one). A lock keeps the two apart. The cache of
   a Mega STE is off around each send. The installer reports to the RP as `PRT_CMD_INSTALLED`
-  (`$0802`: d3 the block, 0 for none; d4 the VBL slot, -1 for none), which a debug build logs:
+  (`$0802`: d3 the hook's state, 0 for none; d4 the VBL slot, -1 for none), which a debug build logs:
   the m68k side has no other output once GEM has cleared the screen. The printer's commands are
   `$08xx`: the high byte is an app's number, and the other Multi-device apps hold `$00` and
   `$02`-`$07` (`printer.h` lists them).
