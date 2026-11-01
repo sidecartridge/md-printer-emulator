@@ -46,7 +46,7 @@ static bool numberUnsaved;
 
 // The installer's last report (PRINTER_CMD_INSTALLED), for the main loop to
 // log: the callback answers first and logs nothing.
-static uint32_t hookBlock;
+static uint32_t hookState;
 static int32_t hookVblSlot;
 static bool hookReported;
 
@@ -108,7 +108,7 @@ static uint32_t ringUsed(void) { return ringHead - ringTail; }
 void __not_in_flash_func(printer_command_cb)(TransmissionProtocol *protocol,
                                              uint16_t *payloadPtr) {
   if (protocol->command_id == PRINTER_CMD_INSTALLED) {
-    hookBlock = TPROTO_GET_PAYLOAD_PARAM32(payloadPtr);
+    hookState = TPROTO_GET_PAYLOAD_PARAM32(payloadPtr);
     hookVblSlot = (int32_t)TPROTO_GET_NEXT32_PAYLOAD_PARAM32(payloadPtr);
     hookReported = true;
     lastHeard = get_absolute_time();
@@ -241,8 +241,8 @@ static void storeNumber(void) {
 void printer_loop(void) {
   if (hookReported) {
     hookReported = false;
-    DPRINTF("printer: the ST's hook: block $%06lx, VBL slot %ld\n",
-            (unsigned long)hookBlock, (long)hookVblSlot);
+    DPRINTF("printer: the ST's hook: state $%06lx, VBL slot %ld\n",
+            (unsigned long)hookState, (long)hookVblSlot);
   }
   uint32_t used = ringUsed();
   if (used == 0) {
