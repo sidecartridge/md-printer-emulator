@@ -147,6 +147,9 @@ What a program prints on the ST becomes bytes on the RP:
   the m68k side has no other output once GEM has cleared the screen. The printer's commands are
   `$08xx`: the high byte is an app's number, and the other Multi-device apps hold `$00` and
   `$02`-`$07` (`printer.h` lists them).
+- **Debug builds** log each job's size and MD5 when it closes, to check a job on the device
+  against an emulated reference without taking the card out. They also lose the power-on race
+  (see the known defects below): reset the ST once the RP is up.
 - **The switch**: shared variable 2 = `PRON` (`rp/src/include/printer.h`), written by `emul.c`
   after `chandler_init()`; without it the hook hands every call to TOS's routine.
 - **The receiver** (`rp/src/printer.c`): the command callback copies a block into a 32 KB ring

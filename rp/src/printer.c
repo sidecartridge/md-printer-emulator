@@ -14,6 +14,7 @@
 #include "aconfig.h"
 #include "debug.h"
 #include "ff.h"
+#include "md5/md5.h"
 #include "pico/stdlib.h"
 
 typedef enum {
@@ -48,6 +49,35 @@ static bool numberUnsaved;
 static uint32_t hookBlock;
 static int32_t hookVblSlot;
 static bool hookReported;
+
+#if defined(_DEBUG) && (_DEBUG != 0)
+// Debug builds log each job's size and MD5 when it closes, so a job can be
+// checked against a reference without taking the card out.
+static MD5Context jobMd5;
+
+static void digestStart(void) { md5Init(&jobMd5); }
+
+static void digestAdd(uint8_t *bytes, size_t length) {
+  md5Update(&jobMd5, bytes, length);
+}
+
+static void digestLog(uint32_t number) {
+  md5Finalize(&jobMd5);
+  char hex[33];
+  for (int i = 0; i < 16; i++) {
+    snprintf(&hex[i * 2], 3, "%02x", jobMd5.digest[i]);
+  }
+  DPRINTF("printer: job %08lu closed, %llu bytes, MD5 %s\n",
+          (unsigned long)number, (unsigned long long)jobMd5.size, hex);
+}
+#else
+static void digestStart(void) {}
+static void digestAdd(uint8_t *bytes, size_t length) {
+  (void)bytes;
+  (void)length;
+}
+static void digestLog(uint32_t number) { (void)number; }
+#endif
 
 static int settingInt(const char *key, int fallback) {
   SettingsConfigEntry *entry = settings_find_entry(aconfig_getContext(), key);
@@ -171,6 +201,7 @@ static void openJob(void) {
   }
   jobNumber = number;
   job = JOB_WRITING;
+  digestStart();
   DPRINTF("printer: job %08lu opened\n", (unsigned long)number);
 }
 
@@ -187,6 +218,7 @@ static void closeJob(void) {
     }
     if (res == FR_OK) {
       counters.jobs++;
+      digestLog(jobNumber);
     } else {
       DPRINTF("printer: job %08lu not closed (%d)\n",
               (unsigned long)jobNumber, res);
@@ -242,6 +274,7 @@ void printer_loop(void) {
   UINT written = 0;
   FRESULT res = f_write(&file, &ring[start], chunk, &written);
   counters.written += written;
+  digestAdd(&ring[start], written);
   if (res == FR_OK && written == chunk && ringUsed() == 0) {
     res = f_sync(&file);
   }
