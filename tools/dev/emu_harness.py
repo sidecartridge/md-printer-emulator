@@ -68,12 +68,18 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         unless the four printer vectors point into it
   svar INDEX VALUE      shared variable INDEX becomes VALUE (hex), as the
                         firmware writes it (fork only)
-  cardfile PATH NBYTES FRAMES [QUIET]
-                        wait until the firmware's card has PATH, NBYTES long
-                        at least, the printer hook has taken nothing for
-                        QUIET frames (500) and the card has all it took
-                        (fork only)
+  cardfile PATTERN NBYTES FRAMES [QUIET]
+                        wait until the printer hook has taken NBYTES since
+                        the ST booted, then nothing for QUIET frames (500),
+                        and the card's files matching PATTERN (the jobs,
+                        e.g. PRINTER/*.PRN) hold all it took (fork only)
   cardsame PATH FILE    FAILs unless PATH on the card equals FILE, byte for byte
+  hookdone NBYTES FRAMES [QUIET]
+                        wait as cardfile does, then FAILs unless the RP
+                        answered every block the hook sent (fork only)
+  cardput PATH          an empty file PATH on the card (a file where the
+                        firmware wants a folder: the card fails for it)
+  cardnone PATTERN      FAILs if a file on the card matches PATTERN
   rom4 NAME             the 64 KB cartridge window, NAME.bin (fork only)
   reset warm|cold       reset the ST (a cold reset power-cycles the
                         Multi-device too; a warm one leaves it running)
@@ -593,26 +599,56 @@ class Run:
         os.replace(self.run_dir / "requests" / "svar.req.tmp", self.run_dir / "requests" / "svar.req")
         self.wait_for(100, lambda: done.exists(), "the firmware's answer to svar")
 
-    def step_cardfile(self, path, nbytes, frames, quiet="500"):
-        """Wait until the firmware's card (the run's sd/) has PATH with at
-        least NBYTES bytes, then until the printer hook has taken nothing
-        for QUIET frames (as the printer step's quiet) and the card holds
-        every byte it took. The card grows a block at a time, so its size
-        alone cannot say the program has finished printing."""
-        self.need_fork("cardfile")
-        f = self.run_dir / "sd" / path
-        self.wait_for(frames, lambda: f.exists() and f.stat().st_size >= int(nbytes),
-                      f"{path} with {nbytes} bytes on the card")
+    def wait_hook(self, nbytes, frames, quiet):
+        """Waits until the printer hook has taken at least NBYTES bytes since
+        the ST booted, then until it has taken nothing for QUIET frames;
+        returns a function that reads its counters (taken, dropped,
+        buffered)."""
         base = int.from_bytes(self.read_mem(0x432, 4), "big") - 2048
-        counters = lambda: struct.unpack(">3L", self.read_mem(base + 8, 12))  # taken, dropped, buffered
+        counters = lambda: struct.unpack(">3L", self.read_mem(base + 8, 12))
+        self.wait_for(frames, lambda: counters()[0] >= int(nbytes),
+                      f"{nbytes} bytes taken by the printer hook")
         taken = -1
         while counters()[0] != taken:
             taken = counters()[0]
             self.wait_frames(int(quiet))
+        return counters
+
+    def step_cardfile(self, pattern, nbytes, frames, quiet="500"):
+        """Wait until the printer hook has taken NBYTES and then nothing for
+        QUIET frames (as the printer step's quiet), and until the files
+        matching PATTERN on the firmware's card (the run's sd/; a job is a
+        file once it has ended) hold every byte it took."""
+        self.need_fork("cardfile")
+        counters = self.wait_hook(nbytes, frames, quiet)
+        card = lambda: sum(f.stat().st_size for f in (self.run_dir / "sd").glob(pattern))
         def complete():
             taken, dropped, buffered = counters()
-            return buffered == 0 and f.stat().st_size == taken - dropped
-        self.wait_for(100, complete, f"{path} with every byte the hook took {counters()}")
+            return buffered == 0 and card() == taken - dropped
+        # The RP ends a job after its idle timeout (10 s, 500 frames).
+        self.wait_for(1000, complete, f"{pattern} with every byte the hook took")
+
+    def step_hookdone(self, nbytes, frames, quiet="500"):
+        """Wait as cardfile does, then FAIL unless the RP answered every
+        block: the buffer is empty and nothing was dropped."""
+        self.need_fork("hookdone")
+        counters = self.wait_hook(nbytes, frames, quiet)
+        self.wait_for(100, lambda: counters()[2] == 0, "the hook's buffer sent")
+        taken, dropped, buffered = counters()
+        if dropped:
+            raise StepFailed(f"the hook dropped {dropped} of {taken} bytes")
+
+    def step_cardput(self, path):
+        """An empty file PATH on the firmware's card: where the firmware
+        expects a folder, the card fails for it."""
+        (self.run_dir / "sd" / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.run_dir / "sd" / path).write_bytes(b"")
+
+    def step_cardnone(self, pattern):
+        """FAILs if a file on the firmware's card matches PATTERN."""
+        found = sorted(str(f.relative_to(self.run_dir / "sd")) for f in (self.run_dir / "sd").glob(pattern))
+        if found:
+            raise StepFailed(f"on the card: {', '.join(found)}")
 
     def step_cardsame(self, path, expected):
         """FAILs unless PATH on the firmware's card equals the file EXPECTED
@@ -694,7 +730,7 @@ def load_steps(args):
         if args.hook == "on":
             # What reaches the printer port with the hook off reaches the card.
             steps = [re.sub(r"^printer (\d+ \d+(?: \d+)?)$",
-                            r"cardfile PRINTER/RECEIVED.PRN \1", st) for st in steps]
+                            r"cardfile PRINTER/*.PRN \1", st) for st in steps]
     return steps
 
 

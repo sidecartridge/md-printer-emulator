@@ -77,15 +77,17 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `print-paths` | stock Hatari: one line through each TOS print path (`st/prpaths.s`) |
 | `print-...` | a program prints (the desktop, Alt-Help, ST Writer, 1st Word Plus, GFA BASIC, Degas Elite, GDOS, XControl's printer settings, our ESC/P pages, Calamus, Signum 3), and `printwatch` says whether through TOS |
 | `hook-capture`, `hook-off`, `hook-reset`, `hook-stwriter` | the printer hook: installed, switched off, after a reset, a GEM program into it |
-| `hook-escp` | our ESC/P pages reach the RP's card (`PRINTER/RECEIVED.PRN`) byte for byte |
+| `hook-escp` | our ESC/P pages reach the RP's card (`PRINTER/00000001.PRN`) byte for byte |
+| `hook-jobs` | each printing is a job, numbered; the number survives a cold reset (the RP's flash) |
+| `hook-nocard` | a card that fails: the ST prints to the end, the RP loses the job and says so |
 | `impossible` | must FAIL: the harness can fail |
 
 `tools/dev/hook_fidelity.sh TEST SETUP` runs a printing test twice on the firmware after
 `[F]irmware` (`--via-firmware`): with the printer switched off (`--hook off`), the printer port
-gets the reference; switched on, the RP's card must get the same bytes. The card grows a
-block at a time, so with the hook on a test's `printer` step becomes `cardfile`, which waits
-until the hook has taken nothing for the same quiet time, its buffer is empty and the card holds
-every byte it took.
+gets the reference; switched on, the RP's jobs on the card, in order, must hold the same bytes.
+A job is a file only once it has ended, so with the hook on a test's `printer` step becomes
+`cardfile`, which waits until the hook has taken nothing for the same quiet time, its buffer is
+empty and the jobs hold every byte it took.
 
 `text` reads the setup terminal back as text: `template_extra.c` matches each
 cell of the framebuffer against the terminal's own font when the harness asks

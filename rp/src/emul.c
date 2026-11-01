@@ -527,7 +527,7 @@ void emul_start() {
   static FATFS fsys;
   SettingsConfigEntry *folder =
       settings_find_entry(aconfig_getContext(), ACONFIG_PARAM_FOLDER);
-  char *folderName = "/test";  // MODIFY THIS TO YOUR FOLDER NAME
+  char *folderName = PRINTER_FOLDER;
   if (folder == NULL) {
     DPRINTF("FOLDER not found in the configuration. Using default value\n");
   } else {
@@ -634,8 +634,8 @@ void emul_start() {
     printer_loop();
     if (chandler_consumeStBoot()) {
       // A new ST session: nothing typed before the reset carries over, and
-      // the ST gets a freshly drawn menu; its printer blocks are numbered
-      // afresh.
+      // the ST gets a freshly drawn menu; the printer's job has ended and
+      // its blocks are numbered afresh.
       printer_stBooted();
       term_clearInputBuffer();
       if (menuScreenActive) {

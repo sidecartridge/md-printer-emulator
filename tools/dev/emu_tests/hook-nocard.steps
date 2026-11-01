@@ -1,0 +1,19 @@
+# A card that fails does not hold up the ST: with a file named PRINTER where
+# the RP wants its folder, no job can open. PRFILES still prints our ESC/P
+# pages to the end, the RP answers every block (the hook drops nothing), and
+# the bytes are lost on the RP's side, not the ST's: it says it cannot open
+# the job, and nothing is on the card.
+@disk-a tools/dev/builds/disks/escp.st
+cardput PRINTER
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+key 0x39
+hookdone 2938 3000
+log "printer: cannot open /PRINTER/00000001.TMP" 100
+wait 600
+cardnone PRINTER/*.*
+hookstate

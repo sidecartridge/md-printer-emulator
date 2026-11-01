@@ -6,7 +6,7 @@ See also: `programming.md` (full shared-region table and budget rules), `README.
 
 ## What this repo is
 
-A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. The code is still the unmodified template (`desc/app.json` carries the template's name, tags and placeholder image, `README.md` and `CHANGELOG.md` are the template's, `userfw.s` is the Cconws demo, and no printer logic exists yet on either side). Where this file says "the template", it describes that inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
+A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. What the ST prints already reaches the card as raw jobs ("The printer path" below); there is no rendering to PDF yet, and `desc/app.json`, `README.md` and `CHANGELOG.md` are still the template's. Where this file says "the template", it describes the inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
 
 ## Build
 
@@ -153,6 +153,12 @@ What a program prints on the ST becomes bytes on the RP:
   and returns (the ST is answered at once); `printer_loop()` in the main loop writes the ring to
   the card. Duplicates (the same number) are dropped and counted; the ST's numbers start over at
   its every boot, so its hello resets the check.
+- **Jobs**: each is one file in the app's `FOLDER` setting (`/PRINTER`): `nnnnnnnn.TMP` from
+  its first byte, renamed `nnnnnnnn.PRN` once `IDLE_SECONDS` (10) pass without a block or the ST
+  boots again. The number comes from `NEXT_JOB`, stored in flash once the ST has been quiet for
+  `IDLE_SECONDS` (writing flash stops the main loop, and the ST waits for its answer meanwhile);
+  a number already on the card is skipped, so a power cut before the store reuses none. A card that fails loses the job's bytes on the RP's side (the
+  ST is answered as ever) and counts them.
 
 ### Shared 64 KB cartridge region
 The Atari ST sees a 64 KB window at `$FA0000`–`$FAFFFF` (mirrored RP-side at `0x20030000`). This is the **single source of truth** for any cross-target data layout — both sides derive every offset symbolically from constants in `rp/src/include/chandler.h` (RP-side) and `target/atarist/src/main.s` (m68k side). **Apps must never hard-code an address inside this region** — always reference the named offset/symbol.

@@ -6,8 +6,10 @@
 // default fewer silently drops the last setting a user saved. To retire a
 // setting, leave its entry here and stop reading it.
 static SettingsConfigEntry defaultEntries[] = {
-    {ACONFIG_PARAM_FOLDER, SETTINGS_TYPE_STRING, "/test"},
+    {ACONFIG_PARAM_FOLDER, SETTINGS_TYPE_STRING, "/PRINTER"},
     {ACONFIG_PARAM_MODE, SETTINGS_TYPE_INT, "255"},  // 255: Menu mode
+    {ACONFIG_PARAM_NEXT_JOB, SETTINGS_TYPE_INT, "1"},
+    {ACONFIG_PARAM_IDLE_SECONDS, SETTINGS_TYPE_INT, "10"},
 };
 
 // Create a global context for our settings

@@ -40,9 +40,16 @@
 // takes them in the main loop, so the ring holds what arrives meanwhile.
 #define PRINTER_RING_SIZE (32 * 1024)
 
-// Where the received bytes go until jobs exist: appended, as they arrive.
+// The jobs: each is one file in the folder (the app's FOLDER setting),
+// nnnnnnnn.TMP while it receives and nnnnnnnn.PRN once IDLE_SECONDS have
+// passed without a block, or the ST has booted again. The number comes from
+// NEXT_JOB, stored in flash once the ST has been quiet for IDLE_SECONDS; a
+// number already on the card is skipped.
 #define PRINTER_FOLDER "/PRINTER"
-#define PRINTER_RECEIVED_FILE PRINTER_FOLDER "/RECEIVED.PRN"
+#define PRINTER_JOB_EXTENSION ".PRN"
+#define PRINTER_TEMP_EXTENSION ".TMP"
+#define PRINTER_JOB_LAST 99999999u  // eight digits
+#define PRINTER_IDLE_SECONDS_MIN 1
 
 typedef struct {
   uint32_t blocks;      // blocks taken
@@ -51,9 +58,14 @@ typedef struct {
   uint32_t malformed;   // blocks dropped: a length past the block or the max
   uint32_t overruns;    // blocks dropped: no room in the ring
   uint32_t written;     // bytes written to the card
-  uint32_t writeErrors; // failed writes to the card
+  uint32_t writeErrors; // the card failed: a job not opened, written or closed
+  uint32_t lost;        // bytes dropped: their job's file had failed
+  uint32_t jobs;        // jobs closed under their final name
 } PrinterCounters;
 
+/**
+ * @brief Reads the folder and the idle timeout from the app's settings.
+ */
 void printer_init(void);
 
 /**
@@ -69,7 +81,8 @@ void printer_command_cb(TransmissionProtocol *protocol, uint16_t *payloadPtr);
 void printer_loop(void);
 
 /**
- * @brief The ST has booted again: its block numbers start over.
+ * @brief The ST has booted again: its block numbers start over, and the job
+ * it was printing has ended.
  */
 void printer_stBooted(void);
 

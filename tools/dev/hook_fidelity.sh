@@ -4,9 +4,9 @@
 # printing test (tools/dev/emu_tests/NAME.steps) twice on the firmware, after
 # [F]irmware has installed the printer hook: switched off, the printer port
 # gets the bytes (the reference, the same screen and the same cartridge as
-# the second run); switched on, the hook sends them to the RP, which appends
-# them to PRINTER/RECEIVED.PRN on its card. PASS when the two are equal byte
-# for byte.
+# the second run); switched on, the hook sends them to the RP, which writes
+# them, one file per job, to PRINTER/ on its card. PASS when the port's bytes
+# equal the jobs' files, in order, byte for byte.
 #
 # Usage:  tools/dev/hook_fidelity.sh TEST SETUP [--timeout S]
 
@@ -23,7 +23,8 @@ python3 "$DEV/emu_harness.py" --setup "$SETUP" --step "wait 1" --name build --ti
 off="$(run off "$@")"
 on="$(run on "$@")"
 ref="$off/printer.out"
-got="$on/sd/PRINTER/RECEIVED.PRN"
+got="$on/card.prn"
+cat "$on"/sd/PRINTER/*.PRN > "$got" 2>/dev/null
 verdict() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['result'])" "$1/report.json" 2>/dev/null || echo "?"; }
 echo "off: $(verdict "$off") $(stat -f %z "$ref" 2>/dev/null || echo 0) bytes on the port  ($off)"
 echo "on:  $(verdict "$on") $(stat -f %z "$got" 2>/dev/null || echo 0) bytes on the card  ($on)"
