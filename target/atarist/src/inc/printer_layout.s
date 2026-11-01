@@ -50,6 +50,7 @@ xconout0            equ $57e            ; xconout[0], the printer (BIOS device 0
 xcostat0            equ $55e            ; xcostat[0]
 prv_lst             equ $50a            ; the screen dump's output routine
 prv_lsto            equ $506            ; the screen dump's status routine
+_dumpflg_var        equ $4ee            ; the screen dump: -1 idle, 1 running (word)
 nvbls_var           equ $454            ; the VBL queue's length (word)
 vblqueue_var        equ $456            ; the VBL queue (pointer)
 _frclock_var        equ $466            ; frames since boot (long)

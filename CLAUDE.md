@@ -149,11 +149,14 @@ What a program prints on the ST becomes bytes on the RP:
   (`$0801`: d3 a sequence number, d4 the length, then the bytes; a retry resends the number), and
   a VBL-queue routine sends the rest after half a second of quiet (TOS 1.04 never calls the
   queue's first slot: the hook takes the last free one). A lock keeps the two apart. The cache of
-  a Mega STE is off around each send. The installer reports to the RP as `PRT_CMD_INSTALLED`
-  (`$0802`: d3 the hook's state, 0 for none; d4 the VBL slot, -1 for none), which a debug build logs:
-  the m68k side has no other output once GEM has cleared the screen. The printer's commands are
-  `$08xx`: the high byte is an app's number, and the other Multi-device apps hold `$00` and
-  `$02`-`$07` (`printer.h` lists them).
+  a Mega STE is off around each send. While a screen dump runs, the hook ignores Alt-Help: TOS
+  adds one to `_dumpflg` at each press (a held key's repeats too) and stops the dump when the flag
+  moves, and the next repeat starts another, so a held key on a real STE gave a job of cut-off
+  dumps; the hook's screen-dump output puts the flag back to 1. The installer reports to the RP
+  as `PRT_CMD_INSTALLED` (`$0802`: d3 the hook's state, 0 for none; d4 the VBL slot, -1 for
+  none), which a debug build logs: the m68k side has no other output once GEM has cleared the
+  screen. The printer's commands are `$08xx`: the high byte is an app's number, and the other
+  Multi-device apps hold `$00` and `$02`-`$07` (`printer.h` lists them).
 - **Debug builds** log each job's size and MD5 when it closes, to check a job on the device
   against an emulated reference without taking the card out. They also lose the power-on race
   (see the known defects below): reset the ST once the RP is up.

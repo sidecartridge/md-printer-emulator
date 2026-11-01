@@ -79,11 +79,20 @@ prt_conout:
 	move.l prt_conout_old(pc), a0
 	jmp (a0)
 
+; prt_lst: the screen dump's bytes. TOS sets _dumpflg to 1 for a dump, adds
+; one at every Alt-Help (a held key's repeats too) and stops the dump when it
+; finds the flag moved; the next repeat would start another. Alt-Help is
+; ignored while a dump runs: the flag goes back to 1.
 	xbra prt_lst
 prt_lst:
 	lea prt_state(pc), a0
 	cmp.l #PRT_ENABLED, PRT_SVAR_ENABLED_ADDR
-	beq.s take_byte
+	bne.s .off
+	cmp.w #1, _dumpflg_var.w
+	ble.s take_byte
+	move.w #1, _dumpflg_var.w
+	bra.s take_byte
+.off:
 	move.l prt_lst_old(pc), a0
 	jmp (a0)
 

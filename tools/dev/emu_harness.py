@@ -78,6 +78,7 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         and the card's files matching PATTERN (the jobs,
                         e.g. PRINTER/*.PRN) hold all it took (fork only)
   cardsame PATH FILE    FAILs unless PATH on the card equals FILE, byte for byte
+                        (FILE in the repository, or card:PATH on the card)
   hookdone NBYTES FRAMES [QUIET]
                         wait as cardfile does, then FAILs unless the RP
                         answered every block the hook sent (fork only)
@@ -713,9 +714,13 @@ class Run:
 
     def step_cardsame(self, path, expected):
         """FAILs unless PATH on the firmware's card equals the file EXPECTED
-        (relative to the repository), byte for byte."""
+        (relative to the repository, or card:PATH on the card), byte for
+        byte."""
         got = (self.run_dir / "sd" / path).read_bytes()
-        want = (ROOT / expected).read_bytes()
+        if expected.startswith("card:"):
+            want = (self.run_dir / "sd" / expected[5:]).read_bytes()
+        else:
+            want = (ROOT / expected).read_bytes()
         if got != want:
             first = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
             raise StepFailed(f"{path}: {len(got)} bytes, {expected}: {len(want)}; first difference at {first}")

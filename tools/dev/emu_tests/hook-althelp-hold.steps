@@ -1,0 +1,27 @@
+# Alt-Help held down, then pressed again, while its screen dump runs. TOS
+# adds one to _dumpflg at each Alt-Help, the held key's repeats included: the
+# running dump stops when it finds the flag moved, and the next repeat starts
+# a new one. With a printer as fast as the RP the desktop's dump takes most of
+# a minute, and a held key cut it short on a real STE. With the printer on,
+# the hook ignores Alt-Help while a dump runs: the job holds one whole dump,
+# the same as a single quick Alt-Help's.
+@disk-a tools/dev/builds/disks/autotest.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+key 0x39
+desktop 2500
+keydown 0x38
+key 0x62
+keyup 0x38
+cardfile PRINTER/*.PRN 64026 4000
+keydown 0x38
+key 0x62 100
+wait 200
+key 0x62
+keyup 0x38
+cardfile PRINTER/*.PRN 128052 4000
+cardsame PRINTER/00000002.PRN card:PRINTER/00000001.PRN
