@@ -27,8 +27,11 @@ command line does; "@hatari
 stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those options):
 
   wait FRAMES           let FRAMES frames pass
-  key KEY [FRAMES]      press a key for FRAMES frames (3), then release it: an
-                        ST scancode in hex (0x1c is Return) or one character
+  key KEY [FRAMES]      press and release a key, in one event; with FRAMES,
+                        hold it that long at least (the harness reads the
+                        frame count every few frames, and TOS repeats a key
+                        held too long): an ST scancode in hex (0x1c is
+                        Return) or one character
   keydown KEY, keyup KEY
                         hold or release a key (Alt-Help: keydown 0x38,
                         key 0x62, keyup 0x38)
@@ -373,14 +376,21 @@ class Run:
     def step_wait(self, frames):
         self.wait_frames(frames)
 
-    def press(self, key, frames=3):
-        self.hatari.send(f"hatari-event keydown {key}")
-        self.wait_frames(frames)
-        self.hatari.send(f"hatari-event keyup {key}")
+    def press(self, key, frames=None):
+        """Without FRAMES, the key goes down and up in one event: released
+        by the harness, a key stays down until its next look at the frame
+        count, several frames late, and TOS repeats it when that comes
+        late enough."""
+        if frames is None:
+            self.hatari.send(f"hatari-event keypress {key}")
+        else:
+            self.hatari.send(f"hatari-event keydown {key}")
+            self.wait_frames(frames)
+            self.hatari.send(f"hatari-event keyup {key}")
         self.wait_frames(2)
 
-    def step_key(self, key, frames="3"):
-        self.press(key, int(frames))
+    def step_key(self, key, frames=None):
+        self.press(key, None if frames is None else int(frames))
 
     def step_keydown(self, key):
         self.hatari.send(f"hatari-event keydown {key}")

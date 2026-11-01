@@ -31,6 +31,9 @@ key 0x1c
 type print
 key 0x1c
 text "NEXT_JOB .INT.: 3" 300
+key m
+key 0x1c
+text "Atari +: (ST|STE|Mega STE), TOS" 300
 key f
 key 0x1c
 wait 100

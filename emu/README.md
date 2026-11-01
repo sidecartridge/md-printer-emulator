@@ -148,6 +148,11 @@ image's files are copied out to the run's `acsi-files/`.
 - **Keys sent before a program reads them stay in the keyboard buffer**: an
   ESC meant for a Mega STE's memory test reaches the next program on another
   machine.
+- **A key the harness holds down repeats**: it releases it only when it next
+  reads the frame count, several frames late, and TOS repeats a key held long
+  enough (in the setup terminal, a key meant to be held 8 frames typed four).
+  `key` and `type` send each key down and up in one event; `key KEY FRAMES`
+  holds it.
 - **Hatari does not deliver punctuation typed as characters**: `type` sends it
   by scancode, and the layout-dependent ones (`" @ ' \ _`) where the running
   TOS's country puts them.
