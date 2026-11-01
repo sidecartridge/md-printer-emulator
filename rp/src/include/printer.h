@@ -30,6 +30,9 @@
 // self-check), 0xFE and 0xFF (chandler).
 #define PRINTER_CMD_BASE 0x0800
 #define PRINTER_CMD_BLOCK 0x0801
+// Once per ST boot, from the hook's installer: d3 the RAM block's address (0:
+// no block, so no hook), d4 the VBL queue slot of the idle flush (-1: none).
+#define PRINTER_CMD_INSTALLED 0x0802
 #define PRINTER_BLOCK_MAX 1024
 #define PRINTER_BLOCK_PARAMS_BYTES 16  // the token and d3-d5, before the bytes
 

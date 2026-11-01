@@ -66,10 +66,16 @@ userfw:
 	install_trampoline PRT_T_COSTAT, xcostat0, prt_costat
 	install_trampoline PRT_T_LST, prv_lst, prt_lst
 	install_trampoline PRT_T_LSTO, prv_lsto, prt_lsto
+	move.l a0, d3
 	bsr install_vbl
+	move.l d0, d4
+	bsr report_install
 	lea installed_msg(pc), a0
 	bra.s .say
 .no_block:
+	moveq #0, d3
+	moveq #-1, d4
+	bsr report_install
 	lea no_block_msg(pc), a0
 .say:
 	move.l a0, -(sp)
@@ -190,10 +196,22 @@ send_block:
 	movem.l (sp)+, d1-d7/a0-a6
 	rts
 
+; report_install: tells the RP what the installer did (PRT_CMD_INSTALLED),
+; d3 the block (0: none) and d4 the VBL slot (-1: none). Not answered, the
+; hook works as before.
+report_install:
+	moveq #0, d5
+	subq.l #2, sp
+	megaste_cache_off (sp)
+	send_sync PRT_CMD_INSTALLED, 12
+	megaste_cache_back (sp)
+	addq.l #2, sp
+	rts
+
 ; install_vbl: a trampoline (a0 the block) in a free slot of the VBL queue,
 ; searched from the last (TOS does not call the first: measured on TOS 1.04,
-; where a routine there was never run); none free, no idle flush (only full
-; buffers go).
+; where a routine there was never run); d0 the slot, or -1 when none is free:
+; no idle flush then (only full buffers go).
 install_vbl:
 	move.w nvbls_var.w, d0
 	beq.s .vbl_none
@@ -211,6 +229,7 @@ install_vbl:
 	subq.w #1, d0
 	bra.s .vbl_slot
 .vbl_none:
+	moveq #-1, d0
 	rts
 .vbl_free:
 	move.l #$58425241, (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE),a0)		; 'XBRA'

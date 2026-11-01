@@ -142,9 +142,11 @@ What a program prints on the ST becomes bytes on the RP:
   (`$0801`: d3 a sequence number, d4 the length, then the bytes; a retry resends the number), and
   a VBL-queue routine sends the rest after half a second of quiet (TOS 1.04 never calls the
   queue's first slot: the hook takes the last free one). A lock keeps the two apart. The cache of
-  a Mega STE is off around each send. The printer's commands are `$08xx`: the high byte is an
-  app's number, and the other Multi-device apps hold `$00` and `$02`-`$07` (`printer.h` lists
-  them).
+  a Mega STE is off around each send. The installer reports to the RP as `PRT_CMD_INSTALLED`
+  (`$0802`: d3 the block, 0 for none; d4 the VBL slot, -1 for none), which a debug build logs:
+  the m68k side has no other output once GEM has cleared the screen. The printer's commands are
+  `$08xx`: the high byte is an app's number, and the other Multi-device apps hold `$00` and
+  `$02`-`$07` (`printer.h` lists them).
 - **The switch**: shared variable 2 = `PRON` (`rp/src/include/printer.h`), written by `emul.c`
   after `chandler_init()`; without it the hook hands every call to TOS's routine.
 - **The receiver** (`rp/src/printer.c`): the command callback copies a block into a 32 KB ring

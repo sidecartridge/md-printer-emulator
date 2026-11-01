@@ -22,18 +22,31 @@ static PrinterCounters counters;
 static FIL file;
 static bool fileOpen;
 
+// The installer's last report (PRINTER_CMD_INSTALLED), for the main loop to
+// log: the callback answers first and logs nothing.
+static uint32_t hookBlock;
+static int32_t hookVblSlot;
+static bool hookReported;
+
 void printer_init(void) {
   ringHead = 0;
   ringTail = 0;
   haveSequence = false;
   memset(&counters, 0, sizeof(counters));
   fileOpen = false;
+  hookReported = false;
 }
 
 static uint32_t ringUsed(void) { return ringHead - ringTail; }
 
 void __not_in_flash_func(printer_command_cb)(TransmissionProtocol *protocol,
                                              uint16_t *payloadPtr) {
+  if (protocol->command_id == PRINTER_CMD_INSTALLED) {
+    hookBlock = TPROTO_GET_PAYLOAD_PARAM32(payloadPtr);
+    hookVblSlot = (int32_t)TPROTO_GET_NEXT32_PAYLOAD_PARAM32(payloadPtr);
+    hookReported = true;
+    return;
+  }
   if (protocol->command_id != PRINTER_CMD_BLOCK) {
     return;
   }
@@ -89,6 +102,11 @@ static bool openFile(void) {
 }
 
 void printer_loop(void) {
+  if (hookReported) {
+    hookReported = false;
+    DPRINTF("printer: the ST's hook: block $%06lx, VBL slot %ld\n",
+            (unsigned long)hookBlock, (long)hookVblSlot);
+  }
   uint32_t used = ringUsed();
   if (used == 0) {
     return;

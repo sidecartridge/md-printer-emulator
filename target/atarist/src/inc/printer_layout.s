@@ -73,3 +73,7 @@ PRT_SVAR_ENABLED_ADDR equ (SHARED_VARIABLES + (PRT_SVAR_ENABLED * 4))
 ; The command a block goes in: d3 its sequence number, d4 its length, d5 0,
 ; then the bytes.
 PRT_CMD_BLOCK       equ $0801
+; The command the installer reports with, once per boot: d3 the block's
+; address (0: no block, no hook), d4 the VBL queue slot the idle flush took
+; (-1: none), d5 0.
+PRT_CMD_INSTALLED   equ $0802
