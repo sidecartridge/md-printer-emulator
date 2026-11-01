@@ -108,7 +108,6 @@ import shlex
 import shutil
 import signal
 import socket
-import struct
 import subprocess
 import sys
 import tempfile
@@ -131,6 +130,21 @@ REFS = DEV / "emu_refs"
 SETUPS = {"st-104": ("st", "emu/tos/tos104uk.img"),
           "ste-162": ("ste", "emu/tos/tos162uk.img"),
           "mste-206": ("megaste", "emu/tos/tos206us.img")}
+
+
+def read_layout(path):
+    """The plain numbers a vasm include defines ("NAME equ 12", "equ $4D"):
+    the printer hook's RAM block, as the ST builds it."""
+    layout = {}
+    for line in path.read_text().splitlines():
+        m = re.match(r"(\w+)\s+equ\s+(\$[0-9A-Fa-f]+|\d+)\s*(?:;.*)?$", line)
+        if m:
+            value = m.group(2)
+            layout[m.group(1)] = int(value[1:], 16) if value.startswith("$") else int(value)
+    return layout
+
+
+PRT = read_layout(ROOT / "target/atarist/src/inc/printer_layout.s")
 SCREEN_TOLERANCE = 0.002  # a screen equals its reference: this share of pixels may differ
 MOUSE_STEP = 8            # pixels a frame at most: Hatari drops what the IKBD has no room for
 MOUSE_PIN = (640, 400)    # more than any ST screen
@@ -554,36 +568,42 @@ class Run:
                       f"{length} bytes at ${address:06x}")
         return path.read_bytes()
 
+    def hook_base(self):
+        """The printer hook's RAM block: just below _membot."""
+        return int.from_bytes(self.read_mem(PRT["_membot_var"], 4), "big") - PRT["PRT_RAM_BYTES"]
+
     def step_hookstate(self, name="hookstate"):
         """The printer hook's RAM block (inc/printer_layout.s): found below
         _membot by its stamp, saved as NAME.bin, its counters and buffer in
         the report; FAILs unless the four vectors point into its
         trampolines."""
-        size, tramp, tramp_size, code = 2048, 64, 24, 12
-        membot = int.from_bytes(self.read_mem(0x432, 4), "big")
-        base = membot - size
-        block = self.read_mem(base, size)
+        base = self.hook_base()
+        block = self.read_mem(base, PRT["PRT_RAM_BYTES"])
         (self.run_dir / f"{name}.bin").write_bytes(block)
         word = lambda o: int.from_bytes(block[o:o + 4], "big")
-        state = {"block": f"${base:06x}", "stamp": block[:4] == b"MDPR" and word(4) == base,
-                 "taken": word(8), "dropped": word(12), "buffered": word(16),
-                 "sequence": word(20), "sent": word(32), "failed": word(36)}
-        vectors = {"xconout0": 0x57E, "xcostat0": 0x55E, "prv_lst": 0x50A, "prv_lsto": 0x506}
-        for i, (vname, vaddr) in enumerate(vectors.items()):
-            value = int.from_bytes(self.read_mem(vaddr, 4), "big")
-            entry = base + tramp + i * tramp_size + code
-            old = word(tramp + i * tramp_size + 8)
-            state[vname] = {"vector": f"${value:06x}", "hooked": value == entry,
-                            "xbra": block[tramp + i * tramp_size:tramp + i * tramp_size + 8] == b"XBRAMDPR",
-                            "previous": f"${old:06x}"}
-        nvbls = int.from_bytes(self.read_mem(0x454, 2), "big")
-        queue = int.from_bytes(self.read_mem(0x456, 4), "big")
+        state = {"block": f"${base:06x}",
+                 "stamp": word(0) == PRT["PRT_MAGIC"] and word(PRT["PRT_SELF"]) == base,
+                 "taken": word(PRT["PRT_TAKEN"]), "dropped": word(PRT["PRT_DROPPED"]),
+                 "buffered": word(PRT["PRT_WIDX"]), "sequence": word(PRT["PRT_SEQ"]),
+                 "sent": word(PRT["PRT_SENT"]), "failed": word(PRT["PRT_FAILED"])}
+        tramp = lambda t: PRT["PRT_TRAMP"] + PRT[t] * PRT["PRT_TRAMP_SIZE"]
+        vectors = {"xconout0": "PRT_T_CONOUT", "xcostat0": "PRT_T_COSTAT",
+                   "prv_lst": "PRT_T_LST", "prv_lsto": "PRT_T_LSTO"}
+        for vname, t in vectors.items():
+            value = int.from_bytes(self.read_mem(PRT[vname], 4), "big")
+            state[vname] = {"vector": f"${value:06x}",
+                            "hooked": value == base + tramp(t) + PRT["PRT_TRAMP_CODE"],
+                            "xbra": word(tramp(t)) == 0x58425241 and word(tramp(t) + 4) == PRT["PRT_XBRA_ID"],
+                            "previous": f"${word(tramp(t) + PRT['PRT_TRAMP_OLD']):06x}"}
+        nvbls = int.from_bytes(self.read_mem(PRT["nvbls_var"], 2), "big")
+        queue = int.from_bytes(self.read_mem(PRT["vblqueue_var"], 4), "big")
         slots = self.read_mem(queue, nvbls * 4) if queue and nvbls else b""
-        vbl = base + tramp + 4 * tramp_size + code
+        vbl = base + tramp("PRT_T_VBL") + PRT["PRT_TRAMP_CODE"]
         state["vbl"] = {"nvbls": nvbls, "queue": f"${queue:06x}",
                         "slots": [f"${int.from_bytes(slots[i:i + 4], 'big'):06x}" for i in range(0, len(slots), 4)],
                         "hooked": any(int.from_bytes(slots[i:i + 4], "big") == vbl for i in range(0, len(slots), 4))}
-        state["buffer"] = block[256:256 + min(word(16), 1024)].decode("latin1")
+        buf = PRT["PRT_BUF"]
+        state["buffer"] = block[buf:buf + min(word(PRT["PRT_WIDX"]), PRT["PRT_BUF_SIZE"])].decode("latin1")
         self.report_extra[name] = state
         (self.run_dir / f"{name}.json").write_text(json.dumps(state, indent=2) + "\n")
         if not state["stamp"] or not all(state[v]["hooked"] and state[v]["xbra"] for v in vectors):
@@ -604,8 +624,9 @@ class Run:
         the ST booted, then until it has taken nothing for QUIET frames;
         returns a function that reads its counters (taken, dropped,
         buffered)."""
-        base = int.from_bytes(self.read_mem(0x432, 4), "big") - 2048
-        counters = lambda: struct.unpack(">3L", self.read_mem(base + 8, 12))
+        base = self.hook_base()
+        read = lambda o: int.from_bytes(self.read_mem(base + PRT[o], 4), "big")
+        counters = lambda: (read("PRT_TAKEN"), read("PRT_DROPPED"), read("PRT_WIDX"))
         self.wait_for(frames, lambda: counters()[0] >= int(nbytes),
                       f"{nbytes} bytes taken by the printer hook")
         taken = -1
