@@ -1,0 +1,16 @@
+# What the ST prints reaches the RP intact: our ESC/P pages (TEXT.PRN and
+# GRAPH.PRN, sent byte by byte through BIOS Bconout(0) by PRFILES from the
+# floppy's AUTO folder) go through the hook, as 1 KB blocks and a last one
+# sent when printing pauses, to the RP, which appends them to
+# PRINTER/RECEIVED.PRN on its card: equal to the two files byte for byte.
+@disk-a tools/dev/builds/disks/escp.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+key 0x39
+cardfile PRINTER/RECEIVED.PRN 2938 3000
+cardsame PRINTER/RECEIVED.PRN tools/dev/builds/disks/escp-expected.prn
+hookstate

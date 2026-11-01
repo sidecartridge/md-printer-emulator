@@ -18,10 +18,14 @@
 ; next to the entry point, which the cartridge cannot hold.
 ;
 ; The hook: status answers ready (-1); output takes the byte at 6(sp), as
-; TOS's own routine does, into the block's buffer (counting what the buffer
-; has no room for) and answers -1. Until the RP turns the printer on (shared
-; variable PRT_SVAR_ENABLED), both hand every call to the routine they
-; replaced, so the ST prints as without the cartridge.
+; TOS's own routine does, into the block's buffer and answers -1. A full
+; buffer goes to the RP at once as a block (PRT_CMD_BLOCK, numbered: a retry
+; resends the number, and the RP drops a block it has just taken); a fifth
+; trampoline, in the VBL queue, sends what is left once printing has paused
+; for PRT_IDLE_FRAMES. A lock keeps the two from sending at once: the VBL
+; routine leaves the buffer alone while the hook works. Until the RP turns
+; the printer on (shared variable PRT_SVAR_ENABLED), the hook hands every
+; call to the routine it replaced, so the ST prints as without the cartridge.
 ;
 ; Machines: ST, STE, Mega ST, Mega STE (68000). A 68030 would need its
 ; instruction cache cleared after the trampolines are written.
@@ -62,6 +66,7 @@ userfw:
 	install_trampoline PRT_T_COSTAT, xcostat0, prt_costat
 	install_trampoline PRT_T_LST, prv_lst, prt_lst
 	install_trampoline PRT_T_LSTO, prv_lsto, prt_lsto
+	bsr install_vbl
 	lea installed_msg(pc), a0
 	bra.s .say
 .no_block:
@@ -77,19 +82,22 @@ userfw:
 ; d0 the answer, d0-d2 and a0-a2 free. The trampoline has put the block's
 ; address in a0.
 
-; take_byte: the byte into the buffer, or counted as dropped; answers -1.
+; take_byte: the byte into the buffer, the buffer to the RP when full;
+; answers -1. Holds the lock meanwhile, so the VBL routine waits.
 take_byte	macro
+	st (PRT_LOCK,a0)
 	move.l (PRT_WIDX,a0), d0
-	cmp.l #PRT_BUF_SIZE, d0
-	bhs.s .\@full
 	lea (PRT_BUF,a0), a1
 	move.b 7(sp), (a1,d0.l)
-	addq.l #1, (PRT_WIDX,a0)
+	addq.l #1, d0
+	move.l d0, (PRT_WIDX,a0)
 	addq.l #1, (PRT_TAKEN,a0)
-	moveq #-1, d0
-	rts
-.\@full:
-	addq.l #1, (PRT_DROPPED,a0)
+	move.l _frclock_var.w, (PRT_LAST,a0)
+	cmp.l #PRT_BUF_SIZE, d0
+	blo.s .\@kept
+	bsr send_block
+.\@kept:
+	sf (PRT_LOCK,a0)
 	moveq #-1, d0
 	rts
 	endm
@@ -129,6 +137,93 @@ prt_lsto:
 	rts
 .off:
 	chain PRT_T_LSTO
+
+; prt_vbl: from the VBL queue, every frame. Sends what the buffer holds once
+; printing has paused for PRT_IDLE_FRAMES, unless the hook holds the lock.
+; The VBL handler has saved every register.
+prt_vbl:
+	tst.b (PRT_LOCK,a0)
+	bne.s .vbl_done
+	tst.l (PRT_WIDX,a0)
+	beq.s .vbl_done
+	move.l _frclock_var.w, d0
+	sub.l (PRT_LAST,a0), d0
+	cmp.l #PRT_IDLE_FRAMES, d0
+	blo.s .vbl_done
+	st (PRT_LOCK,a0)
+	bsr.s send_block
+	sf (PRT_LOCK,a0)
+.vbl_done:
+	rts
+
+; send_block: the buffer (a0 the block) to the RP, numbered, retried with
+; the same number; emptied either way (what the RP never took is counted as
+; dropped). Keeps every register but d0.
+send_block:
+	movem.l d1-d7/a0-a6, -(sp)
+	move.l a0, a5
+	megaste_cache_off (PRT_CACHE,a5)
+	addq.l #1, (PRT_SEQ,a5)
+	move.w #CMD_RETRIES_COUNT, -(sp)
+.send_try:
+	move.l (PRT_SEQ,a5), d3			; the number, the same on a retry
+	move.l (PRT_WIDX,a5), d4			; the length
+	moveq #0, d5
+	move.l d4, d6
+	lea (PRT_BUF,a5), a4
+	move.w #PRT_CMD_BLOCK, d0
+	bsr send_sync_write_command_to_sidecart
+	tst.w d0
+	beq.s .send_ok
+	subq.w #1, (sp)
+	bpl.s .send_try
+	addq.l #1, (PRT_FAILED,a5)
+	move.l (PRT_WIDX,a5), d0
+	add.l d0, (PRT_DROPPED,a5)
+	bra.s .send_done
+.send_ok:
+	addq.l #1, (PRT_SENT,a5)
+.send_done:
+	addq.l #2, sp
+	clr.l (PRT_WIDX,a5)
+	megaste_cache_back (PRT_CACHE,a5)
+	movem.l (sp)+, d1-d7/a0-a6
+	rts
+
+; install_vbl: a trampoline (a0 the block) in a free slot of the VBL queue,
+; searched from the last (TOS does not call the first: measured on TOS 1.04,
+; where a routine there was never run); none free, no idle flush (only full
+; buffers go).
+install_vbl:
+	move.w nvbls_var.w, d0
+	beq.s .vbl_none
+	subq.w #1, d0
+	move.l vblqueue_var.w, a1
+	move.w d0, d1
+	lsl.w #2, d1
+	add.w d1, a1						; the last slot
+.vbl_slot:
+	tst.w d0
+	beq.s .vbl_none						; slot 0: not used
+	tst.l (a1)
+	beq.s .vbl_free
+	subq.l #4, a1
+	subq.w #1, d0
+	bra.s .vbl_slot
+.vbl_none:
+	rts
+.vbl_free:
+	move.l #$58425241, (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE),a0)		; 'XBRA'
+	move.l #PRT_XBRA_ID, (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+4,a0)
+	clr.l (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+PRT_TRAMP_OLD,a0)
+	move.w #$41FA, (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+12,a0)		; lea d16(pc),a0
+	move.w #-(PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+14), (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+14,a0)
+	move.w #$4EF9, (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+16,a0)		; jmp abs.l
+	lea prt_vbl(pc), a2
+	move.l a2, (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+18,a0)
+	lea (PRT_TRAMP+(PRT_T_VBL*PRT_TRAMP_SIZE)+PRT_TRAMP_CODE,a0), a2
+	move.l a2, (a1)							; the slot, last
+	rts
 
 installed_msg:
 	dc.b	27,"E","MD printer emulator: hook installed",13,10,0

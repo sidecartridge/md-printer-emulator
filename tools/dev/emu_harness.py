@@ -68,6 +68,12 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         unless the four printer vectors point into it
   svar INDEX VALUE      shared variable INDEX becomes VALUE (hex), as the
                         firmware writes it (fork only)
+  cardfile PATH NBYTES FRAMES [QUIET]
+                        wait until the firmware's card has PATH, NBYTES long
+                        at least, the printer hook has taken nothing for
+                        QUIET frames (500) and the card has all it took
+                        (fork only)
+  cardsame PATH FILE    FAILs unless PATH on the card equals FILE, byte for byte
   rom4 NAME             the 64 KB cartridge window, NAME.bin (fork only)
   reset warm|cold       reset the ST (a cold reset power-cycles the
                         Multi-device too; a warm one leaves it running)
@@ -96,6 +102,7 @@ import shlex
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -546,14 +553,15 @@ class Run:
         _membot by its stamp, saved as NAME.bin, its counters and buffer in
         the report; FAILs unless the four vectors point into its
         trampolines."""
-        size, tramp, tramp_size, code = 2048, 32, 24, 12
+        size, tramp, tramp_size, code = 2048, 64, 24, 12
         membot = int.from_bytes(self.read_mem(0x432, 4), "big")
         base = membot - size
         block = self.read_mem(base, size)
         (self.run_dir / f"{name}.bin").write_bytes(block)
         word = lambda o: int.from_bytes(block[o:o + 4], "big")
         state = {"block": f"${base:06x}", "stamp": block[:4] == b"MDPR" and word(4) == base,
-                 "taken": word(8), "dropped": word(12), "buffered": word(16)}
+                 "taken": word(8), "dropped": word(12), "buffered": word(16),
+                 "sequence": word(20), "sent": word(32), "failed": word(36)}
         vectors = {"xconout0": 0x57E, "xcostat0": 0x55E, "prv_lst": 0x50A, "prv_lsto": 0x506}
         for i, (vname, vaddr) in enumerate(vectors.items()):
             value = int.from_bytes(self.read_mem(vaddr, 4), "big")
@@ -562,6 +570,13 @@ class Run:
             state[vname] = {"vector": f"${value:06x}", "hooked": value == entry,
                             "xbra": block[tramp + i * tramp_size:tramp + i * tramp_size + 8] == b"XBRAMDPR",
                             "previous": f"${old:06x}"}
+        nvbls = int.from_bytes(self.read_mem(0x454, 2), "big")
+        queue = int.from_bytes(self.read_mem(0x456, 4), "big")
+        slots = self.read_mem(queue, nvbls * 4) if queue and nvbls else b""
+        vbl = base + tramp + 4 * tramp_size + code
+        state["vbl"] = {"nvbls": nvbls, "queue": f"${queue:06x}",
+                        "slots": [f"${int.from_bytes(slots[i:i + 4], 'big'):06x}" for i in range(0, len(slots), 4)],
+                        "hooked": any(int.from_bytes(slots[i:i + 4], "big") == vbl for i in range(0, len(slots), 4))}
         state["buffer"] = block[256:256 + min(word(16), 1024)].decode("latin1")
         self.report_extra[name] = state
         (self.run_dir / f"{name}.json").write_text(json.dumps(state, indent=2) + "\n")
@@ -577,6 +592,36 @@ class Run:
         (self.run_dir / "requests" / "svar.req.tmp").write_text(f"{index} {value}\n")
         os.replace(self.run_dir / "requests" / "svar.req.tmp", self.run_dir / "requests" / "svar.req")
         self.wait_for(100, lambda: done.exists(), "the firmware's answer to svar")
+
+    def step_cardfile(self, path, nbytes, frames, quiet="500"):
+        """Wait until the firmware's card (the run's sd/) has PATH with at
+        least NBYTES bytes, then until the printer hook has taken nothing
+        for QUIET frames (as the printer step's quiet) and the card holds
+        every byte it took. The card grows a block at a time, so its size
+        alone cannot say the program has finished printing."""
+        self.need_fork("cardfile")
+        f = self.run_dir / "sd" / path
+        self.wait_for(frames, lambda: f.exists() and f.stat().st_size >= int(nbytes),
+                      f"{path} with {nbytes} bytes on the card")
+        base = int.from_bytes(self.read_mem(0x432, 4), "big") - 2048
+        counters = lambda: struct.unpack(">3L", self.read_mem(base + 8, 12))  # taken, dropped, buffered
+        taken = -1
+        while counters()[0] != taken:
+            taken = counters()[0]
+            self.wait_frames(int(quiet))
+        def complete():
+            taken, dropped, buffered = counters()
+            return buffered == 0 and f.stat().st_size == taken - dropped
+        self.wait_for(100, complete, f"{path} with every byte the hook took {counters()}")
+
+    def step_cardsame(self, path, expected):
+        """FAILs unless PATH on the firmware's card equals the file EXPECTED
+        (relative to the repository), byte for byte."""
+        got = (self.run_dir / "sd" / path).read_bytes()
+        want = (ROOT / expected).read_bytes()
+        if got != want:
+            first = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+            raise StepFailed(f"{path}: {len(got)} bytes, {expected}: {len(want)}; first difference at {first}")
 
     def step_rom4(self, name):
         shutil.copy(self.request("rom4", "rom4.bin"), self.run_dir / f"{name}.bin")
@@ -636,7 +681,21 @@ def load_steps(args):
                     raise SystemExit(f"{path.name}: unknown option {line}")
             elif line and not line.startswith("#"):
                 steps.append(line)
-    return steps + args.step
+    steps += args.step
+    if args.via_firmware:
+        args.hatari = "fork"  # the firmware is only in the fork
+        # The firmware's setup menu first: [F]irmware installs the printer
+        # hook, switched off first if asked (shared variable 2).
+        first = ['text "Atari +: (ST|STE|Mega STE), TOS" 1500']
+        if args.hook == "off":
+            first.append("svar 2 0")
+        first += ["key f", "key 0x1c"]
+        steps = first + steps
+        if args.hook == "on":
+            # What reaches the printer port with the hook off reaches the card.
+            steps = [re.sub(r"^printer (\d+ \d+(?: \d+)?)$",
+                            r"cardfile PRINTER/RECEIVED.PRN \1", st) for st in steps]
+    return steps
 
 
 def hatari_command(args, run_dir):
@@ -696,6 +755,12 @@ def main():
     ap.add_argument("--window", action="store_true", help="show Hatari's window")
     ap.add_argument("--update-refs", action="store_true")
     ap.add_argument("--no-build", action="store_true")
+    ap.add_argument("--via-firmware", action="store_true",
+                    help="(fork) pass the firmware's setup menu with [F]irmware first, which "
+                         "installs the printer hook")
+    ap.add_argument("--hook", choices=("on", "off"), default="on",
+                    help="with --via-firmware: off clears the printer's switch first, so the "
+                         "printer port gets what the hook would")
     ap.add_argument("--timeout", type=float, default=300, help="host seconds for the whole run")
     args = ap.parse_args()
 

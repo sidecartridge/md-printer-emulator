@@ -8,6 +8,8 @@
 
 #include "term.h"
 
+#include "printer.h"
+
 #include <ctype.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -146,6 +148,11 @@ void term_setCommands(const Command *cmds, size_t count) {
 void __not_in_flash_func(term_command_cb)(TransmissionProtocol *protocol,
                                           uint16_t *payloadPtr) {
   (void)payloadPtr;
+  // The printer's blocks are printer.c's: copying each into the terminal's
+  // buffer would cost 2 KB a block for nothing.
+  if ((protocol->command_id & 0xFF00) == PRINTER_CMD_BASE) {
+    return;
+  }
   uint8_t writeIndex = protocolWriteIndex;
   TransmissionProtocol *writeBuffer = &protocolBuffers[writeIndex];
 

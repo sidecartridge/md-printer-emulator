@@ -5,7 +5,8 @@
 #   autotest.st   a floppy with \AUTO\AUTOTEST.PRG (tools/dev/st/autotest.s)
 #   prpaths.st    a floppy with \AUTO\PRPATHS.PRG (tools/dev/st/prpaths.s)
 #   escp.st       a floppy with \AUTO\PRFILES.PRG (tools/dev/st/prfiles.s) and the
-#                 ESC/P test pages TEXT.PRN, GRAPH.PRN (tools/dev/st/make_escp_pages.py)
+#                 ESC/P test pages TEXT.PRN, GRAPH.PRN (tools/dev/st/make_escp_pages.py);
+#                 escp-expected.prn, the two as PRFILES sends them
 #
 # Usage:  tools/dev/make_bench_disks.sh
 
@@ -27,4 +28,5 @@ cp "$DEV/builds/st/PRPATHS.PRG" "$WORK/prpaths/AUTO/"
 mkdir -p "$WORK/escp/AUTO"
 cp "$DEV/builds/st/PRFILES.PRG" "$WORK/escp/AUTO/"
 python3 "$DEV/st/make_escp_pages.py" "$WORK/escp" > /dev/null
+cat "$WORK/escp/TEXT.PRN" "$WORK/escp/GRAPH.PRN" > "$OUT/escp-expected.prn"   # what PRFILES prints
 "$DEV/make_floppy.sh" "$WORK/escp" "$OUT/escp.st" ESCP

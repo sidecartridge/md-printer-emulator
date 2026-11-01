@@ -120,9 +120,34 @@ The firmware is a **two-target build**: m68k assembly that runs on the Atari ST 
 
 ### Atari ST side (`target/atarist/`)
 - `src/main.s` — m68k cartridge boot + dispatch + terminal. Lives at `$FA0000` in the ST address space (ROM4 cartridge region). Defines the cartridge header (`CA_MAGIC`, `CA_INIT`, …), command magic numbers, and the shared-variable layout used to talk to the RP2040.
-- `src/userfw.s` — **the primary extension point for app-specific m68k code.** `src/userfw.ld` places `main.s` at offset `0x0000` (2 KB budget) and `userfw.s` at offset `0x0800` (6 KB budget); `main.s` exposes the latter as `USERFW equ (ROM4_ADDR + $800)`. When the RP-side terminal command `f` ([F]irmware) is selected, the RP writes `CMD_START = 4` to the cartridge sentinel; the m68k's vsync-polled `check_commands` dispatches to `rom_function`, which `jmp`s to `USERFW`. The default `userfw.s` is a Cconws demo that returns to TOS — replace its body with your own logic. The sentinel keeps `CMD_START`, so every later ST boot runs the user firmware again, as an app's emulation mode would; a short SELECT press restarts the RP into the setup menu (and clears the window), and the next ST reset shows the menu. It includes `inc/sidecart_layout.s` (the window and the command channel, shared with `main.s`), the macros and, at its end, the senders followed by the NOP tail. Its code must be PC-relative: it is linked at offset `$0800`, not at `$FA0800`.
+- `src/userfw.s` — **the primary extension point for app-specific m68k code.** `src/userfw.ld` places `main.s` at offset `0x0000` (2 KB budget) and `userfw.s` at offset `0x0800` (6 KB budget); `main.s` exposes the latter as `USERFW equ (ROM4_ADDR + $800)`. When the RP-side terminal command `f` ([F]irmware) is selected, the RP writes `CMD_START = 4` to the cartridge sentinel; the m68k's vsync-polled `check_commands` dispatches to `rom_function`, which `jmp`s to `USERFW`. In this app `userfw.s` is the printer hook (below). The sentinel keeps `CMD_START`, so every later ST boot runs the user firmware again, as an app's emulation mode would; a short SELECT press restarts the RP into the setup menu (and clears the window), and the next ST reset shows the menu. It includes `inc/sidecart_layout.s` (the window and the command channel, shared with `main.s`), the macros and, at its end, the senders followed by the NOP tail. Its code must be PC-relative: it is linked at offset `$0800`, not at `$FA0800`.
 - Adding more m68k modules: add a new `.text_<name>` section in `userfw.ld`, mirror the offset with an `equ (ROM4_ADDR + $????)` in `inc/sidecart_layout.s`, and add the `.o` target to `target/atarist/Makefile` (same pattern as `gemdrive.ld` in `md-drives-emulator`).
 - Built via `stcmd make release` (m68k assembler in Docker); the cartridge image (header + all `.text_*` sections) must fit in 8 KB. A 64 KB padded copy is then converted to `target_firmware.h` for inclusion in the RP build.
+
+### The printer path (this app)
+What a program prints on the ST becomes bytes on the RP:
+
+- **Every TOS print path ends in four vectors** (measured on TOS 1.04, 1.62 and 2.06): BIOS
+  `Bconout(0)`/`Bcostat(0)` through `xconout[0]` (`$57E`) and `xcostat[0]` (`$55E`), which
+  GEMDOS's `Cprnout` and `Fwrite` to `PRN:` also reach, and the screen dump's `prv_lst`
+  (`$50A`) and `prv_lsto` (`$506`), which Alt-Help calls directly. Programs that drive the
+  parallel port's hardware (Calamus 1.x; Signum 3 in its default "Centronics schnell" mode) are
+  not caught.
+- **RAM**: a second cartridge header (`main.s`, `CA_INIT` bit 26, before GEMDOS starts) raises
+  `_membot` by 2 KB and stamps the block; `target/atarist/src/inc/printer_layout.s` has its
+  layout. The hook's code stays in the cartridge; the block holds its state, the 1 KB buffer and
+  five XBRA trampolines (id `MDPR`), the only code in RAM.
+- **The hook** (`userfw.s`, installed at every boot after `CMD_START`): status answers ready;
+  output takes the byte at `6(sp)`; a full buffer goes to the RP at once as `PRT_CMD_BLOCK`
+  (`$0301`: d3 a sequence number, d4 the length, then the bytes; a retry resends the number), and
+  a VBL-queue routine sends the rest after half a second of quiet (TOS 1.04 never calls the
+  queue's first slot: the hook takes the last free one). A lock keeps the two apart. The cache of
+  a Mega STE is off around each send.
+- **The switch**: shared variable 2 = `PRON` (`rp/src/include/printer.h`), written by `emul.c`
+  after `chandler_init()`; without it the hook hands every call to TOS's routine.
+- **The receiver** (`rp/src/printer.c`): the command callback copies a block into a 32 KB ring
+  and returns (the ST is answered at once); `printer_loop()` in the main loop writes the ring to
+  the card. Duplicates (the same number) are dropped and counted.
 
 ### Shared 64 KB cartridge region
 The Atari ST sees a 64 KB window at `$FA0000`–`$FAFFFF` (mirrored RP-side at `0x20030000`). This is the **single source of truth** for any cross-target data layout — both sides derive every offset symbolically from constants in `rp/src/include/chandler.h` (RP-side) and `target/atarist/src/main.s` (m68k side). **Apps must never hard-code an address inside this region** — always reference the named offset/symbol.

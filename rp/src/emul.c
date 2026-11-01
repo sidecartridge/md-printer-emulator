@@ -482,6 +482,8 @@ void emul_start() {
   }
   chandler_init();
   chandler_addCB(term_command_cb);
+  printer_init();
+  chandler_addCB(printer_command_cb);
   // The ST's printer hook takes what programs print only with this set;
   // otherwise it hands every call to TOS's own routine (printer.h).
   SET_SHARED_VAR(PRINTER_SVAR_ENABLED, PRINTER_ENABLED,
@@ -629,6 +631,7 @@ void emul_start() {
     // Drain the ROM3 command ring and dispatch to the registered callbacks on
     // every pass: the ST spins on its answer, so the loop never waits.
     chandler_loop();
+    printer_loop();
     if (chandler_consumeStBoot()) {
       // A new ST session: nothing typed before the reset carries over, and
       // the ST gets a freshly drawn menu.

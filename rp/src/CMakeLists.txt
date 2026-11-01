@@ -132,6 +132,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         httpc/httpc.c
         hw_config.c
         network.c
+        printer.c
         reset.c
         romemul.c
         sdcard.c
