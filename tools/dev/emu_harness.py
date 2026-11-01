@@ -148,6 +148,9 @@ def read_layout(path):
 
 
 PRT = read_layout(ROOT / "target/atarist/src/inc/printer_layout.s")
+# The RP ends a print job after IDLE_SECONDS without a block: its default.
+IDLE_FRAMES = 50 * int(re.search(r'ACONFIG_PARAM_IDLE_SECONDS, SETTINGS_TYPE_INT, "(\d+)"',
+                                 (ROOT / "rp/src/aconfig.c").read_text()).group(1))
 SCREEN_TOLERANCE = 0.002  # a screen equals its reference: this share of pixels may differ
 MOUSE_STEP = 8            # pixels a frame at most: Hatari drops what the IKBD has no room for
 MOUSE_PIN = (640, 400)    # more than any ST screen
@@ -656,8 +659,8 @@ class Run:
         def complete():
             taken, dropped, buffered = counters()
             return buffered == 0 and card() == taken - dropped
-        # The RP ends a job after its idle timeout (10 s, 500 frames).
-        self.wait_for(1000, complete, f"{pattern} with every byte the hook took")
+        # A job is a file once the RP's idle timeout has ended it.
+        self.wait_for(2 * IDLE_FRAMES, complete, f"{pattern} with every byte the hook took")
 
     def step_hookdone(self, nbytes, frames, quiet="500"):
         """Wait as cardfile does, then FAIL unless the RP answered every
