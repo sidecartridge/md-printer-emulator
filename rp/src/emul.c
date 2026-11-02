@@ -16,8 +16,7 @@
 #include "commemul.h"
 #include "constants.h"
 #include "debug.h"
-#include "devdownload.h"  // Debug-only test download, driven over SWD
-#include "devhooks.h"     // Debug-only SWD mailbox; include in this file only
+#include "devhooks.h"  // Debug-only SWD mailbox; include in this file only
 #include "display.h"
 #include "ff.h"
 #include "gconfig.h"
@@ -119,8 +118,6 @@ static uint32_t emul_devhooksApp(uint16_t commandId, const uint16_t *payload,
               (block != NULL) ? "ok" : "refused");
       return (block != NULL) ? 1u : 0u;
     }
-    case DEVHOOKS_APP_DOWNLOAD:
-      return devdownload_start();
     default:
       return 0;
   }
@@ -626,7 +623,6 @@ void emul_start() {
   absolute_time_t nextNetworkPoll = get_absolute_time();
   while (getKeepActive()) {
     devhooks_poll();
-    devdownload_poll();
     select_poll();
     // Drain the ROM3 command ring and dispatch to the registered callbacks on
     // every pass: the ST spins on its answer, so the loop never waits.

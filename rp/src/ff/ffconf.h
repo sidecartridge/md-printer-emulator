@@ -249,8 +249,8 @@ number.
 */
 
 /* The most files and directories open at once, each entry about 16 bytes of
-/  RAM. The template opens at most one file (download.c) and keeps no directory
-/  open; 8 leaves room for an app's own. An app sets it to the most it keeps
+/  RAM. The printer opens one file at a time (the job) and keeps no directory
+/  open; 8 leaves room to spare. An app sets it to the most it keeps
 /  open at once, with room for what the ST can hold open through it
 /  (md-drives-emulator uses 32). When the table is full, f_open and f_opendir
 /  return FR_TOO_MANY_OPEN_FILES: report that as its own condition, not as a

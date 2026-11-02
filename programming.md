@@ -291,7 +291,6 @@ These libraries are in different repositories and are included as submodules:
 
 These libraries are part of the `rp` project and are included in the repository:  
 
- - httpc: A lightweight HTTP client library for making requests to web servers, used for fetching updates and resources.
 - settings: The `rp-settings` library.
 - u8g2: A graphics library for rendering text and images on various display types, used for the external display support in the Booster Core.
 
@@ -312,7 +311,7 @@ The goal of this architecture is to have a clean separation between the code tha
 
 The code in the `/rp` folder is the code that will be compiled and linked with the RP2040 SDK. This code is responsible for handling the micro SD card, communicating with the remote computer, networking and providing the web interface if needed. 
 
-Apart from the libraries described in the previous sections (`Pico-SDK`, `Pico-Extras`, `no-OS-FatFS-SD-SDIO-SPI-RPi-Pico`, `httpc`, `settings` and `u8g2`), the code in the `/rp` folder is composed os several boilerplate modules that are used to implement the basic features of the microfirmware app. These modules are:
+Apart from the libraries described in the previous sections (`Pico-SDK`, `Pico-Extras`, `no-OS-FatFS-SD-SDIO-SPI-RPi-Pico`, `settings` and `u8g2`), the code in the `/rp` folder is composed os several boilerplate modules that are used to implement the basic features of the microfirmware app. These modules are:
 
 ##### aconfig.c
 
@@ -392,41 +391,6 @@ The `display.c` should be wrapped by a more high level display manager that will
 This module is responsible for implementing a simple terminal interface to display text on the external display. It uses the `display.c` module to draw the text and implement the functionality, and also the `tprotocol.h` header file to implement the communication protocol with the remote computer; the core of the microfirmware app.
 
 This modelo implements the commands that listen for remote keystrokes and convert them into ASCII characters that combined form the terminal commands. In this version the terminal commands are very simple and only implement the basic functionality to manage the local settings, exit the app or launch the Booster app.
-
-##### download.c
-
-As the name suggests, this module is responsible for downloading any kind of file from a remote HTTP server and saving it to the micro SD card, through `tmp.download` in the app folder. It uses lwIP's HTTP client (`httpc/`). `https://` needs a build with HTTPS (`APP_DOWNLOAD_HTTPS=1 ./build.sh ...`); the default build refuses it with `DOWNLOAD_HTTPSNOTBUILT_ERROR`. The server's certificate is not verified.
-
-The download runs asynchronously: `download_poll()` never waits, so call it from the main loop, which keeps serving the ST, while the status is `DOWNLOAD_STATUS_STARTED` or `DOWNLOAD_STATUS_IN_PROGRESS`. It follows redirects and retries a failed hop by itself. Only a 2xx response reaches the file; on any failure the temporary file is deleted, the status is `DOWNLOAD_STATUS_FAILED`, and `download_finish()` returns the reason (also `download_getError()` and `download_getHttpStatus()`). A sketch:
-
-```c
-  download_setFilepath("http://example.com/files/GAME.ST");  // saved as GAME.ST
-  if (download_start() != DOWNLOAD_OK) {
-    DPRINTF("Cannot start: %d\n", download_getError());
-  }
-  while (getKeepActive()) {
-    chandler_loop();  // keep answering the ST
-    term_loop();
-    switch (download_getStatus()) {
-      case DOWNLOAD_STATUS_STARTED:
-      case DOWNLOAD_STATUS_IN_PROGRESS:
-        download_poll();
-        break;
-      case DOWNLOAD_STATUS_COMPLETED:
-        download_finish();
-        download_confirm();  // tmp.download -> GAME.ST
-        download_setStatus(DOWNLOAD_STATUS_IDLE);
-        break;
-      case DOWNLOAD_STATUS_FAILED:
-        DPRINTF("Download failed: %d (HTTP %d)\n", download_finish(),
-                download_getHttpStatus());
-        download_setStatus(DOWNLOAD_STATUS_IDLE);
-        break;
-      default:
-        break;
-    }
-  }
-```
 
 ##### emul.c
 
@@ -688,8 +652,8 @@ Example of the code that implemens the high level commands of the terminal. It a
 The memory mapping of the Multi-device board is defined in the file `rp/src/memmap_rp.ld` and it performs significant changes to the standard memory mapping of a RP2040 application. The memory mapping of the Multi-device board is:
 - FLASH: Reduced from the 2MBytes found in the Raspberry Pi Pico W boards to 1024Kbytes for the active microfirmware app.
 - RAM: Reduced from the 264KBytes found in the Raspberry Pi Pico W boards to **192Kbytes** (origin `0x20000000`, length `192K`).
-- SCRATCH_X: No changes. Core 1's stack; the template never starts core 1. A build with HTTPS downloads (`APP_DOWNLOAD_HTTPS=1`) gives it to core 0's stack instead, since a TLS handshake came too close to 4Kbytes.
-- SCRATCH_Y: Core 0's stack, all 4Kbytes (`PICO_STACK_SIZE`), with an MPU guard on its bottom 32 bytes: an overflow is a HardFault instead of silent damage. With HTTPS the stack runs on through SCRATCH_X, 8Kbytes, and the guard sits at the bottom of SCRATCH_X.
+- SCRATCH_X: No changes. Core 1's stack; the template never starts core 1.
+- SCRATCH_Y: Core 0's stack, all 4Kbytes (`PICO_STACK_SIZE`), with an MPU guard on its bottom 32 bytes: an overflow is a HardFault instead of silent damage.
 - CONFIG_FLASH: FLASH memory reserved for the configuration parameters of the Multi-device board. 4Kbytes.
 - ROM_IN_RAM: RAM memory reserved for the cartridge ROM4 image. **64Kbytes** at `0x20030000`. This is exactly one cartridge ROM bank; the second 64 KB bank is no longer mirrored to RAM since ROM3 is now used as a command channel rather than a data bank.
 
