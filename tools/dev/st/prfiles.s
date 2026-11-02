@@ -1,8 +1,10 @@
-; prfiles.s: sends the floppy's printer files to the printer, byte by byte
-; through BIOS Bconout(0), as a program that prints through TOS does: A:\TEXT.PRN
-; then A:\GRAPH.PRN (tools/dev/st/make_escp_pages.py makes them). Runs from the
-; AUTO folder; waits for a key before printing, and prints "PRFILES DONE" and
-; waits for a key at the end, so the harness sees stable screens. Assembled by tools/dev/st/build.sh.
+; prfiles.s: sends the printer files TEXT.PRN then GRAPH.PRN, in the current
+; folder, to the printer, byte by byte through BIOS Bconout(0), as a program
+; that prints through TOS does (tools/dev/st/make_escp_pages.py makes them).
+; Runs from a floppy's AUTO folder (the current folder is then the floppy's
+; root) or from the desktop (its own folder); waits for a key before
+; printing, and prints "PRFILES DONE" and waits for a key at the end, so the
+; harness sees stable screens. Assembled by tools/dev/st/build.sh.
 
 BUFSIZE	equ	16384
 
@@ -77,8 +79,8 @@ sendfile:
 .out:	rts
 
 	section	data
-textname:	dc.b	"A:\TEXT.PRN",0
-graphname:	dc.b	"A:\GRAPH.PRN",0
+textname:	dc.b	"TEXT.PRN",0
+graphname:	dc.b	"GRAPH.PRN",0
 ready:	dc.b	27,"E","PRFILES: a key prints TEXT.PRN, GRAPH.PRN",13,10,0
 done:	dc.b	13,10,"PRFILES DONE",13,10,0
 	even
