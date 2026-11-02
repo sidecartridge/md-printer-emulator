@@ -274,4 +274,11 @@ python3 tools/dev/power_cycles.py                            # cold boots: menu 
 - `stackdepth.py` computes worst-case stack depth from those builds (static call edges only, so
   treat its answer as a floor).
 
+## Printer streams
+
+- `escp_scan.py FILE...` lists the ESC/P commands a printer stream uses, with their counts: the
+  emulated tests' `printer.out` and the jobs on the card. It skips the data of bit images and
+  user-defined characters, so their bytes are never taken for commands, and stops with the
+  offset at a sequence it does not know. `--sum` gives one table for all the files.
+
 `logs/` and `builds/` are generated here and are gitignored.
