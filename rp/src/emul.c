@@ -12,6 +12,7 @@
 
 // inclusw in the C file to avoid multiple definitions
 #include "aconfig.h"
+#include "blink.h"
 #include "chandler.h"
 #include "commemul.h"
 #include "constants.h"
@@ -19,9 +20,7 @@
 #include "devhooks.h"  // Debug-only SWD mailbox; include in this file only
 #include "display.h"
 #include "ff.h"
-#include "gconfig.h"
 #include "memfunc.h"
-#include "network.h"
 #include "pico/stdlib.h"
 #include "printer.h"
 #include "reset.h"
@@ -85,8 +84,6 @@ static bool keepActive = true;
 static bool menuScreenActive = false;
 static absolute_time_t menuRefreshTime;
 
-// Polling tick used as the network poll callback so command handling stays
-// alive during multi-second WiFi operations.
 #if defined(_DEBUG) && (_DEBUG != 0)
 // Heap held on request by `swd.py app heap_hold`, to test running out of it.
 typedef struct DevhooksHeldBlock {
@@ -131,12 +128,6 @@ static void emul_serviceFor(uint32_t ms) {
   while (absolute_time_diff_us(get_absolute_time(), until) > 0) {
     chandler_loop();
   }
-}
-
-static void __not_in_flash_func(emul_pollTick)(void) {
-  chandler_loop();
-  term_loop();
-  select_poll();
 }
 
 #define MENU_REFRESH_TIME_MS 1000
@@ -211,8 +202,7 @@ static void menu(void) {
   term_printString(atariLineShown);
   term_printString("\n");
 
-  // Display network information
-  term_printNetworkInfo();
+  term_printDeviceInfo();
 
   term_printString("\n");
   term_printString("Select an option: ");
@@ -328,7 +318,6 @@ static void preinit() {
   // Show the title
   showTitle();
   term_printString("\n\n");
-  term_printString("Configuring network... please wait...\n");
 
   display_refresh();
 }
@@ -500,9 +489,9 @@ void emul_start() {
   // Initialize the display
   display_setupU8g2();
 
-  // Configure the SELECT button before anything slow (the SD card, the
-  // network), so a press is seen from here on; its edge interrupt catches one
-  // made while a wait cannot poll. A short press restarts the RP. A press held
+  // Configure the SELECT button before anything slow (the SD card), so a
+  // press is seen from here on; its edge interrupt catches one made while a
+  // wait cannot poll. A short press restarts the RP. A press held
   // for SELECT_LONG_RESET is a factory reset: the global settings are erased
   // and the RP restarts into Booster, which then clears every app's settings.
   select_configure();
@@ -542,64 +531,7 @@ void emul_start() {
   // Initialize the display again (in case the terminal emulator changed it)
   display_setupU8g2();
 
-  // Pre-init the stuff
-  // In this example it only prints the please wait message, but can be used as
-  // a place to put other code that needs to be run before the network is
-  // initialized
   preinit();
-
-  // 6. Init the network, if needed
-  // It's always a good idea to wait for the network to be ready
-  // Get the WiFi mode from the settings
-  // If you are developing code that does not use the network, you can
-  // comment this section
-  // It's important to note that the network parameters are taken from the
-  // global configuration of the Booster app. The network parameters are
-  // ready only for the microfirmware apps.
-  SettingsConfigEntry *wifiMode =
-      settings_find_entry(gconfig_getContext(), PARAM_WIFI_MODE);
-  wifi_mode_t wifiModeValue = WIFI_MODE_STA;
-  if (wifiMode == NULL) {
-    DPRINTF("No WiFi mode found in the settings. No initializing.\n");
-  } else {
-    wifiModeValue = (wifi_mode_t)atoi(wifiMode->value);
-    if (wifiModeValue != WIFI_MODE_AP) {
-      DPRINTF("WiFi mode is STA\n");
-      wifiModeValue = WIFI_MODE_STA;
-      int err = network_wifiInit(wifiModeValue);
-      if (err != 0) {
-        DPRINTF("Error initializing the network: %i. No initializing.\n", err);
-      } else {
-        // Drain commands and run the terminal loop during WiFi polling so
-        // commands sent during the (potentially multi-second) connect don't
-        // pile up in the ROM3 ring.
-        network_setPollingCallback(emul_pollTick);
-        // Connect to the WiFi network
-        int maxAttempts = 3;  // or any other number defined elsewhere
-        int attempt = 0;
-        err = NETWORK_WIFI_STA_CONN_ERR_TIMEOUT;
-
-        while ((attempt < maxAttempts) &&
-               (err == NETWORK_WIFI_STA_CONN_ERR_TIMEOUT)) {
-          err = network_wifiStaConnect();
-          attempt++;
-
-          if ((err > 0) && (err < NETWORK_WIFI_STA_CONN_ERR_TIMEOUT)) {
-            DPRINTF("Error connecting to the WiFi network: %i\n", err);
-          }
-        }
-
-        if (err == NETWORK_WIFI_STA_CONN_ERR_TIMEOUT) {
-          DPRINTF("Timeout connecting to the WiFi network after %d attempts\n",
-                  maxAttempts);
-          // Optionally, return an error code here.
-        }
-        network_setPollingCallback(NULL);
-      }
-    } else {
-      DPRINTF("WiFi mode is AP. No initializing.\n");
-    }
-  }
 
   // 7. Now complete the terminal emulator initialization
   // The terminal emulator is used to interact with the user to configure the
@@ -607,9 +539,7 @@ void emul_start() {
   init();
 
   // Blink on
-#ifdef BLINK_H
   blink_on();
-#endif
 
   // 8. Start the main loop
   // The main loop is the core of the app. It is responsible for running the
@@ -620,7 +550,7 @@ void emul_start() {
   devhooks_setAppHandler(emul_devhooksApp);
 
   DPRINTF("Start the app loop here\n");
-  absolute_time_t nextNetworkPoll = get_absolute_time();
+  absolute_time_t nextChipPoll = get_absolute_time();
   while (getKeepActive()) {
     devhooks_poll();
     select_poll();
@@ -648,16 +578,11 @@ void emul_start() {
         display_refresh();
       }
     }
-#if PICO_CYW43_ARCH_POLL
-    // Wi-Fi every 10 ms, which is plenty for lwIP's timers and leaves the
-    // loop to the command ring. Polling on every pass also works: a HardFault
-    // inside cyw43_arch_poll() once blamed on it was the debug probe's tooling
-    // writing into this firmware's RAM (fixed in tools/dev/swd.py).
-    if (absolute_time_diff_us(nextNetworkPoll, get_absolute_time()) >= 0) {
-      network_safePoll();
-      nextNetworkPoll = make_timeout_time_ms(10);
+    // The LED's chip every 10 ms, which leaves the loop to the command ring.
+    if (absolute_time_diff_us(nextChipPoll, get_absolute_time()) >= 0) {
+      blink_poll();
+      nextChipPoll = make_timeout_time_ms(10);
     }
-#endif
 
     // Run the terminal foreground (consume the published command, render
     // output, etc.).

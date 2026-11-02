@@ -254,7 +254,7 @@ def main():
         rc, out = run(os.path.join(DEV, "flash.sh"), "debug", timeout=900)
         check("flash.sh debug builds, flashes and verifies", rc == 0,
               out.strip().splitlines()[-1] if out.strip() else "")
-        time.sleep(6)  # let the boot reach the main loop (Wi-Fi connect)
+        time.sleep(3)  # let the boot reach the main loop
     device_checks(args.reset)
     failed = [r for r in results if not r["ok"]]
     print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")

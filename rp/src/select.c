@@ -10,8 +10,8 @@ static reset_callback_t reset_cb = NULL;
 static reset_callback_t reset_long_cb = NULL;
 
 // Edge history written by the GPIO interrupt. It lets select_poll() see a
-// press that started and ended while core 0 was busy (an SD stall, a Wi-Fi
-// wait). Times are time_us_32() values; differences stay valid for 35 min.
+// press that started and ended while core 0 was busy (an SD stall, the LED's
+// chip starting). Times are time_us_32() values; differences stay valid for 35 min.
 static volatile bool edgeSeen = false;
 static volatile uint32_t lastEdgeUs = 0;
 static volatile bool riseSeen = false;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Worst-case stack depth from GCC -fcallgraph-info=su output (.ci files).
 
-Static call edges only. Indirect calls (lwIP callbacks, chandler callbacks,
+Static call edges only. Indirect calls (chandler callbacks,
 async_context workers, IRQs) are not followed, so stitch them by hand:
 
   # largest application frames

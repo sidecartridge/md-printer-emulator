@@ -403,7 +403,7 @@ The critical path is in the `emul_start` function called from the `main.c` file.
 3. If we are here, it means the app is not in emulation mode, but in setup/configuration mode.
 4. During the setup/configuration mode, the driver code must interact with the user to configure the device. The cartridge ROM4 read engine, the ROM3 command DMA ring, and the command dispatcher are brought up here in this order: `init_romemul(false); commemul_init(); chandler_init(); chandler_addCB(...)`. Register one callback per subsystem that needs to react to commands (for the template, `term_command_cb`).
 5. Init the sd card
-6. Init the network, if needed. The polling callback should drain both `chandler_loop()` and `term_loop()` so commands sent during the multi-second WiFi connect window are not dropped.
+6. Nothing: this app has no network (the template brought Wi-Fi up here).
 7. Now complete the terminal emulator initialization
 8. Main loop. Each iteration calls `chandler_loop()` (drains the ROM3 ring → dispatches commands to registered callbacks) followed by `term_loop()` (renders any published terminal command).
 9. If exited main loop, send START computer command
@@ -468,66 +468,6 @@ Then, access the global settings using the `gconfig_getContext()` function to ge
 ```
 
 Writing to the global settings is not allowed from the microfirmware apps. Use the Booster app to modify the global settings. 
-
-##### network.c
-
-This module is responsible for handling the network connection of the microfirmware app. It uses the `pico-sdk` library to control the network interface and implement the functionality. 
-
-This module implements several functions to handle the network connections. As a rule of thumb is strongly recommnded to try a network connection early in the critical path of the app, and give up and return an error if no connection is done.  
-
-It's possible to start a WiFi connection in STA mode or AP mode. The STA mode is used to connect to a WiFi network, while the AP mode is used to create a WiFi network. An example code of how to start a WiFi connection in STA mode is:
-
-```c
-SettingsConfigEntry *wifiMode =
-    settings_find_entry(gconfig_getContext(), PARAM_WIFI_MODE);
-wifi_mode_t wifiModeValue = WIFI_MODE_STA;
-if (wifiMode == NULL) {
-  DPRINTF("No WiFi mode found in the settings. No initializing.\n");
-} else {
-  wifiModeValue = (wifi_mode_t)atoi(wifiMode->value);
-  if (wifiModeValue != WIFI_MODE_AP) {
-    DPRINTF("WiFi mode is STA\n");
-    wifiModeValue = WIFI_MODE_STA;
-    int err = network_wifiInit(wifiModeValue);
-    if (err != 0) {
-      DPRINTF("Error initializing the network: %i. No initializing.\n", err);
-    } else {
-      // Set the term_loop as a callback during the polling period
-      network_setPollingCallback(term_loop);
-      // Connect to the WiFi network
-      int maxAttempts = 3;  // or any other number defined elsewhere
-      int attempt = 0;
-      err = NETWORK_WIFI_STA_CONN_ERR_TIMEOUT;
-
-      while ((attempt < maxAttempts) &&
-              (err == NETWORK_WIFI_STA_CONN_ERR_TIMEOUT)) {
-        err = network_wifiStaConnect();
-        attempt++;
-
-        if ((err > 0) && (err < NETWORK_WIFI_STA_CONN_ERR_TIMEOUT)) {
-          DPRINTF("Error connecting to the WiFi network: %i\n", err);
-        }
-      }
-
-      if (err == NETWORK_WIFI_STA_CONN_ERR_TIMEOUT) {
-        DPRINTF("Timeout connecting to the WiFi network after %d attempts\n",
-                maxAttempts);
-        // Optionally, return an error code here.
-      }
-      network_setPollingCallback(NULL);
-    }
-  } else {
-    DPRINTF("WiFi mode is AP. No initializing.\n");
-  }
-}
-```
-
-In this example, we check if the WiFi mode is set to STA. If it is, we initialize the network and connect to the WiFi network. The code blocks until the connection is established or the maximum number of attempts is reached. If the connection is not established, we return an error code. The `network_setPollingCallback` allows to set a callback function that will be called during the polling period. This is useful to handle the network events and update the UI.
-
-{: .note}
-The polling callback should drain the ROM3 command ring **and** the terminal loop so that commands sent during the multi-second WiFi connect window are not dropped. The template ships an `emul_pollTick` helper that calls `chandler_loop(); term_loop(); select_poll();` and installs it via `network_setPollingCallback(emul_pollTick);` while the connect is in flight. Apps that pass `term_loop` directly will leak commands during connect.
-
-To keep the code simple, give up the app if the network connection is not established. If the connection is successful, continue with the critical path of the app.
 
 ##### reset.c
 
@@ -942,7 +882,7 @@ while (keepActive) {
 }
 ```
 
-If your app does long-blocking work (e.g. `cyw43_arch_wait_for_work_until` during WiFi connect), make sure `chandler_loop` is also drained from the polling callback you install with `network_setPollingCallback`, otherwise commands will pile up in the ring during the blocking window. The template's `emul.c` provides `emul_pollTick` as a one-liner that calls both `chandler_loop()` and `term_loop()`.
+If your app does long-blocking work, make sure `chandler_loop()` and `term_loop()` are also called from inside the wait, otherwise commands will pile up in the ring during the blocking window.
 
 To avoid memory issues and manage little and big endian properly, use the macros defined in `tprotocol.h` to read and write the payload. The macros start with the prefix `TPROTO`.
 

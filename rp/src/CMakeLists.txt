@@ -128,7 +128,6 @@ target_sources(${PROJECT_NAME} PRIVATE
         emul.c
         gconfig.c
         hw_config.c
-        network.c
         printer.c
         reset.c
         romemul.c
@@ -152,12 +151,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     u8g2                     # for display
 )
 
-# Conditionally link the CYW43 architecture library if supported
+# The Pico W's LED is on its Wi-Fi chip: the chip's driver in poll mode, with
+# no network stack (blink.c)
 if (PICO_CYW43_SUPPORTED)
     target_link_libraries(${PROJECT_NAME} PRIVATE
-        pico_cyw43_arch_lwip_poll
-#        pico_cyw43_arch_lwip_threadsafe_background
+        pico_cyw43_arch_poll
         )
+    # As the SDK's pico_cyw43_arch_none: the driver without lwIP
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CYW43_LWIP=0)
 else()
     message(WARNING "CYW43 architecture not supported")
 endif()
@@ -175,7 +176,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_include_directories(${PROJECT_NAME} BEFORE PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/ff)
 
-# Needed to include lwipopts.h properly. settings/ holds settings.h;
+# settings/ holds settings.h;
 # settings.c is compiled directly into the target (add_executable above).
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}

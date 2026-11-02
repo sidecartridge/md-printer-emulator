@@ -12,10 +12,9 @@
 /**
  * @brief
  *
- * Launches the ROM emulator application. Initializes terminal interfaces,
- * configures network and storage systems, and loads the ROM data from SD or
- * network sources. Manages the main loop which includes firmware bypass,
- * user interaction and potential system resets.
+ * Launches the ROM emulator application. Initializes terminal interfaces and
+ * the SD card, and loads the ROM data. Manages the main loop which includes
+ * firmware bypass, user interaction and potential system resets.
  */
 void emul_start();
 

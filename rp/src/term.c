@@ -25,7 +25,7 @@
 #include "display_term.h"
 #include "gconfig.h"
 #include "memfunc.h"
-#include "network.h"
+#include "pico/unique_id.h"
 #include "reset.h"
 #include "romemul.h"
 #include "sdcard.h"
@@ -41,81 +41,8 @@ static uint8_t protocolWriteIndex = 1;
 static bool protocolBufferReady = false;
 static uint32_t protocolOverwriteCount = 0;
 
-#define TERM_NETWORK_INFO_VALUE_SIZE 64
+#define TERM_MENU_INFO_VALUE_SIZE 64
 #define TERM_MENU_LIVE_LINE_MAX 128
-
-static void term_getConfigValueOrNA(const char *key, char *buffer,
-                                    size_t bufferSize) {
-  if (bufferSize == 0) {
-    return;
-  }
-
-  buffer[0] = '\0';
-  SettingsConfigEntry *entry = settings_find_entry(gconfig_getContext(), key);
-  if ((entry != NULL) && (entry->value != NULL) && (entry->value[0] != '\0')) {
-    snprintf(buffer, bufferSize, "%s", entry->value);
-    return;
-  }
-
-  snprintf(buffer, bufferSize, "N/A");
-}
-
-#if defined(CYW43_WL_GPIO_LED_PIN)
-static void term_getIpStringOrNA(const ip_addr_t *address, char *buffer,
-                                 size_t bufferSize) {
-  if (bufferSize == 0) {
-    return;
-  }
-
-  if ((address == NULL) || ip_addr_isany(address)) {
-    snprintf(buffer, bufferSize, "N/A");
-    return;
-  }
-
-  const char *ipString = ipaddr_ntoa(address);
-  if ((ipString != NULL) && (ipString[0] != '\0')) {
-    snprintf(buffer, bufferSize, "%s", ipString);
-  } else {
-    snprintf(buffer, bufferSize, "N/A");
-  }
-}
-
-static void term_getConfiguredDns(char *dns1, size_t dns1Size, char *dns2,
-                                  size_t dns2Size) {
-  if (dns1Size > 0) {
-    snprintf(dns1, dns1Size, "N/A");
-  }
-  if (dns2Size > 0) {
-    snprintf(dns2, dns2Size, "N/A");
-  }
-
-  SettingsConfigEntry *entry =
-      settings_find_entry(gconfig_getContext(), PARAM_WIFI_DNS);
-  if ((entry == NULL) || (entry->value == NULL) || (entry->value[0] == '\0')) {
-    return;
-  }
-
-  char dnsValue[(TERM_NETWORK_INFO_VALUE_SIZE * 2) + 2] = {0};
-  snprintf(dnsValue, sizeof(dnsValue), "%s", entry->value);
-
-  char *dnsSecond = strchr(dnsValue, ',');
-  if (dnsSecond != NULL) {
-    *dnsSecond = '\0';
-    dnsSecond++;
-    while (*dnsSecond == ' ') {
-      dnsSecond++;
-    }
-  }
-
-  if ((dns1Size > 0) && (dnsValue[0] != '\0')) {
-    snprintf(dns1, dns1Size, "%s", dnsValue);
-  }
-
-  if ((dns2Size > 0) && (dnsSecond != NULL) && (dnsSecond[0] != '\0')) {
-    snprintf(dns2, dns2Size, "%s", dnsSecond);
-  }
-}
-#endif
 
 // Command handlers
 static void cmdClear(const char *arg);
@@ -186,7 +113,6 @@ static char screen[TERM_SCREEN_SIZE];
 static uint8_t cursorX = 0;
 static uint8_t cursorY = 0;
 
-static uint8_t menuRowSsid = 0;
 static uint8_t menuRowSelect = 0;
 static uint8_t menuRowSd = 0;
 static uint8_t menuPromptRow = 0;
@@ -681,178 +607,34 @@ static void termPrintMenuLine(const char *fmt, ...) {
   term_printString("\n");
 }
 
-void term_printNetworkInfo(void) {
-  // Static, not on the stack: nineteen values would take more than half of
-  // core 0's stack. The menu runs on core 0 only and never re-enters; the
-  // values are cleared on every call, as they were as locals.
-  static char hostName[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char ipAddress[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char gateway[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char dns1[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char dns2[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char netmask[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char ssid[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char bssid[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char authMode[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char signalDb[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char wifiMode[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char wifiLink[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char ipMode[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char wifiMac[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char mcuArch[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char mcuId[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char selectState[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char sdStatus[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char sdSpace[TERM_NETWORK_INFO_VALUE_SIZE];
-  char *const values[] = {hostName, ipAddress,   gateway,  dns1,     dns2,
-                          netmask,  ssid,        bssid,    authMode, signalDb,
-                          wifiMode, wifiLink,    ipMode,   wifiMac,  mcuArch,
-                          mcuId,    selectState, sdStatus, sdSpace};
-  for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); i++) {
-    memset(values[i], 0, TERM_NETWORK_INFO_VALUE_SIZE);
-  }
+static bool term_buildLiveMenuLines(char *selectLine, size_t selectLineSize,
+                                    char *sdLine, size_t sdLineSize);
 
-  term_getConfigValueOrNA(PARAM_HOSTNAME, hostName, sizeof(hostName));
-  term_getConfigValueOrNA(PARAM_WIFI_IP, ipAddress, sizeof(ipAddress));
-  term_getConfigValueOrNA(PARAM_WIFI_GATEWAY, gateway, sizeof(gateway));
-  term_getConfigValueOrNA(PARAM_WIFI_NETMASK, netmask, sizeof(netmask));
-#if defined(CYW43_WL_GPIO_LED_PIN)
-  term_getConfiguredDns(dns1, sizeof(dns1), dns2, sizeof(dns2));
-#else
-  snprintf(dns1, sizeof(dns1), "N/A");
-  snprintf(dns2, sizeof(dns2), "N/A");
-#endif
-  snprintf(ssid, sizeof(ssid), "N/A");
-  snprintf(bssid, sizeof(bssid), "N/A");
-  snprintf(authMode, sizeof(authMode), "N/A");
-  snprintf(signalDb, sizeof(signalDb), "N/A");
-  snprintf(wifiMode, sizeof(wifiMode), "N/A");
-  snprintf(wifiLink, sizeof(wifiLink), "N/A");
-  snprintf(ipMode, sizeof(ipMode), "N/A");
-  snprintf(wifiMac, sizeof(wifiMac), "N/A");
-  snprintf(mcuArch, sizeof(mcuArch), "N/A");
-  snprintf(mcuId, sizeof(mcuId), "N/A");
-  snprintf(selectState, sizeof(selectState), "%s",
-           select_detectPush() ? "Pressed" : "Released");
-  snprintf(sdStatus, sizeof(sdStatus), "Not mounted");
-  snprintf(sdSpace, sizeof(sdSpace), "N/A");
+void term_printDeviceInfo(void) {
+  // Static, not on the stack, like the live lines'.
+  static char boardId[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
+  static char selectLine[TERM_MENU_LIVE_LINE_MAX];
+  static char sdLine[TERM_MENU_LIVE_LINE_MAX];
 
-  uint32_t sdTotalMb = 0;
-  uint32_t sdFreeMb = 0;
-  if (sdcard_getMountedInfo(&sdTotalMb, &sdFreeMb)) {
-    snprintf(sdStatus, sizeof(sdStatus), "Mounted");
-    snprintf(sdSpace, sizeof(sdSpace), "%lu/%lu MB", (unsigned long)sdFreeMb,
-             (unsigned long)sdTotalMb);
-  } else if (sdcard_isMounted()) {
-    snprintf(sdStatus, sizeof(sdStatus), "Error");
-  }
-
-  term_printString("Network status: ");
-
-#if defined(CYW43_WL_GPIO_LED_PIN)
-  const char *wifiModeValue = network_getWifiModeStr();
-  if ((wifiModeValue != NULL) && (wifiModeValue[0] != '\0')) {
-    snprintf(wifiMode, sizeof(wifiMode), "%s", wifiModeValue);
-  }
-  const char *wifiLinkValue = network_wifiConnStatusStr();
-  if ((wifiLinkValue != NULL) && (wifiLinkValue[0] != '\0')) {
-    snprintf(wifiLink, sizeof(wifiLink), "%s", wifiLinkValue);
-  }
-
-  SettingsConfigEntry *dhcpEntry =
-      settings_find_entry(gconfig_getContext(), PARAM_WIFI_DHCP);
-  if ((dhcpEntry != NULL) && (dhcpEntry->value != NULL) &&
-      (dhcpEntry->value[0] != '\0')) {
-    char dhcpChar = dhcpEntry->value[0];
-    bool dhcpEnabled = (dhcpChar == 't') || (dhcpChar == 'T') ||
-                       (dhcpChar == '1') || (dhcpChar == 'y') ||
-                       (dhcpChar == 'Y');
-    // A rejected static configuration fell back to DHCP (the reason is on
-    // the debug console): show what is in use, not what was asked for.
-    bool staticRejected = network_getStaticConfigRejected(NULL);
-    snprintf(ipMode, sizeof(ipMode), "%s",
-             (dhcpEnabled || staticRejected) ? "DHCP" : "Static");
-  }
-
-  const char *wifiMacValue = network_getCyw43MacStr();
-  if ((wifiMacValue != NULL) && (wifiMacValue[0] != '\0')) {
-    snprintf(wifiMac, sizeof(wifiMac), "%s", wifiMacValue);
-  }
-
-  const char *mcuArchValue = network_getMcuArchStr();
-  if ((mcuArchValue != NULL) && (mcuArchValue[0] != '\0')) {
-    snprintf(mcuArch, sizeof(mcuArch), "%s", mcuArchValue);
-  }
-  const char *mcuIdValue = network_getMcuIdStr();
-  if ((mcuIdValue != NULL) && (mcuIdValue[0] != '\0')) {
-    snprintf(mcuId, sizeof(mcuId), "%s", mcuIdValue);
-  }
-
-  ip_addr_t currentIp = network_getCurrentIp();
-  bool hasIp = !ip_addr_isany(&currentIp);
-  term_printString(hasIp ? "Connected\n" : "Not connected\n");
-
-  if (hasIp) {
-    term_getIpStringOrNA(&currentIp, ipAddress, sizeof(ipAddress));
-
-    wifi_network_info_t currentNetwork = network_getCurrentNetworkInfo();
-    if (currentNetwork.ssid[0] != '\0') {
-      snprintf(ssid, sizeof(ssid), "%s", currentNetwork.ssid);
-      snprintf(authMode, sizeof(authMode), "%s",
-               network_getAuthTypeString(currentNetwork.auth_mode));
-    }
-    if (currentNetwork.bssid[0] != '\0') {
-      snprintf(bssid, sizeof(bssid), "%s", currentNetwork.bssid);
-    }
-    if ((currentNetwork.rssi <= 0) && (currentNetwork.rssi >= -120)) {
-      snprintf(signalDb, sizeof(signalDb), "%d dBm", currentNetwork.rssi);
-    }
-  }
-
-  struct netif *netIf = netif_default;
-
-  if (netIf != NULL) {
-    term_getIpStringOrNA(&(netIf->gw), gateway, sizeof(gateway));
-    term_getIpStringOrNA(&(netIf->netmask), netmask, sizeof(netmask));
-
-#if defined(LWIP_NETIF_HOSTNAME) && LWIP_NETIF_HOSTNAME
-    const char *runtimeHostname = netif_get_hostname(netIf);
-    if ((runtimeHostname != NULL) && (runtimeHostname[0] != '\0')) {
-      snprintf(hostName, sizeof(hostName), "%s", runtimeHostname);
-    }
-#endif
-  }
-
-  term_getIpStringOrNA(dns_getserver(0), dns1, sizeof(dns1));
-  term_getIpStringOrNA(dns_getserver(1), dns2, sizeof(dns2));
-#else
-  term_printString("Unavailable\n");
-#endif
+  pico_get_unique_board_id_string(boardId, sizeof(boardId));
+  term_buildLiveMenuLines(selectLine, sizeof(selectLine), sdLine,
+                          sizeof(sdLine));
 
   menuRowsValid = false;
 
-  termPrintMenuLine("MCU type  : %s (%s)", mcuArch, mcuId);
-  termPrintMenuLine("Host name : %s", hostName);
-  termPrintMenuLine("WiFi      : %s (%s)", wifiMode, wifiLink);
-  termPrintMenuLine("IP        : %s (%s)", ipAddress, ipMode);
-  termPrintMenuLine("Netmask   : %s", netmask);
-  termPrintMenuLine("Gateway   : %s", gateway);
-  termPrintMenuLine("DNS       : %s, %s", dns1, dns2);
-  termPrintMenuLine("WiFi MAC  : %s", wifiMac);
-
-  menuRowSsid = cursorY;
-  termPrintMenuLine("SSID      : %s (%s)", ssid, signalDb);
-
-  termPrintMenuLine("BSSID     : %s", bssid);
-  termPrintMenuLine("Auth mode : %s", authMode);
+#if PICO_RP2350
+  termPrintMenuLine("MCU type  : RP2350 (%s)", boardId);
+#else
+  termPrintMenuLine("MCU type  : RP2040 (%s)", boardId);
+#endif
 
   term_printString("\n");
   menuRowSelect = cursorY;
-  termPrintMenuLine("SELECT    : %s", selectState);
+  termPrintMenuLine("%s", selectLine);
 
   term_printString("\n");
   menuRowSd = cursorY;
-  termPrintMenuLine("SD card   : %s (%s)", sdStatus, sdSpace);
+  termPrintMenuLine("%s", sdLine);
 
   menuRowsValid = true;
 }
@@ -910,24 +692,19 @@ static void term_appendText(char *buffer, size_t bufferSize, size_t *offset,
   *offset += writeSize;
 }
 
-static bool term_buildLiveMenuLines(char *ssidLine, size_t ssidLineSize,
-                                    char *selectLine, size_t selectLineSize,
+static bool term_buildLiveMenuLines(char *selectLine, size_t selectLineSize,
                                     char *sdLine, size_t sdLineSize) {
-  if ((ssidLine == NULL) || (selectLine == NULL) || (sdLine == NULL) ||
-      (ssidLineSize == 0) || (selectLineSize == 0) || (sdLineSize == 0)) {
+  if ((selectLine == NULL) || (sdLine == NULL) || (selectLineSize == 0) ||
+      (sdLineSize == 0)) {
     return false;
   }
 
   // Static, not on the stack, like the menu's own values; each one is
   // written below before it is read.
-  static char ssid[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char signalDb[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char selectState[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char sdStatus[TERM_NETWORK_INFO_VALUE_SIZE];
-  static char sdSpace[TERM_NETWORK_INFO_VALUE_SIZE];
+  static char selectState[TERM_MENU_INFO_VALUE_SIZE];
+  static char sdStatus[TERM_MENU_INFO_VALUE_SIZE];
+  static char sdSpace[TERM_MENU_INFO_VALUE_SIZE];
 
-  snprintf(ssid, sizeof(ssid), "N/A");
-  snprintf(signalDb, sizeof(signalDb), "N/A");
   snprintf(selectState, sizeof(selectState), "%s",
            select_detectPush() ? "Pressed" : "Released");
   snprintf(sdStatus, sizeof(sdStatus), "Not mounted");
@@ -943,24 +720,8 @@ static bool term_buildLiveMenuLines(char *ssidLine, size_t ssidLineSize,
     snprintf(sdStatus, sizeof(sdStatus), "Error");
   }
 
-#if defined(CYW43_WL_GPIO_LED_PIN)
-  ip_addr_t currentIp = network_getCurrentIp();
-  bool hasIp = !ip_addr_isany(&currentIp);
-  if (hasIp) {
-    wifi_network_info_t currentNetwork = network_getCurrentNetworkInfo();
-    if (currentNetwork.ssid[0] != '\0') {
-      snprintf(ssid, sizeof(ssid), "%s", currentNetwork.ssid);
-    }
-    if ((currentNetwork.rssi <= 0) && (currentNetwork.rssi >= -120)) {
-      snprintf(signalDb, sizeof(signalDb), "%d dBm", currentNetwork.rssi);
-    }
-  }
-#endif
-
   // Cut like termPrintMenuLine, so the refresh never wraps either.
   size_t maxLine = TERM_SCREEN_SIZE_X;
-  snprintf(ssidLine, ssidLineSize < maxLine ? ssidLineSize : maxLine,
-           "SSID      : %s (%s)", ssid, signalDb);
   snprintf(selectLine, selectLineSize < maxLine ? selectLineSize : maxLine,
            "SELECT    : %s", selectState);
   snprintf(sdLine, sdLineSize < maxLine ? sdLineSize : maxLine,
@@ -970,39 +731,30 @@ static bool term_buildLiveMenuLines(char *ssidLine, size_t ssidLineSize,
 }
 
 void term_refreshMenuLiveInfo(void) {
-  static char prevSsidLine[TERM_MENU_LIVE_LINE_MAX] = {0};
   static char prevSelectLine[TERM_MENU_LIVE_LINE_MAX] = {0};
   static char prevSdLine[TERM_MENU_LIVE_LINE_MAX] = {0};
 
-  // Static, not on the stack (together almost a kilobyte): the three lines
-  // are written in full before they are read, and the update is built from
-  // offset 0 with snprintf, which terminates it.
-  static char ssidLine[TERM_MENU_LIVE_LINE_MAX];
+  // Static, not on the stack: the two lines are written in full before they
+  // are read, and the update is built from offset 0 with snprintf, which
+  // terminates it.
   static char selectLine[TERM_MENU_LIVE_LINE_MAX];
   static char sdLine[TERM_MENU_LIVE_LINE_MAX];
 
   if (!menuRowsValid ||
-      !term_buildLiveMenuLines(ssidLine, sizeof(ssidLine), selectLine,
-                               sizeof(selectLine), sdLine, sizeof(sdLine))) {
+      !term_buildLiveMenuLines(selectLine, sizeof(selectLine), sdLine,
+                               sizeof(sdLine))) {
     return;
   }
 
-  bool updateSsid = (strcmp(ssidLine, prevSsidLine) != 0);
   bool updateSelect = (strcmp(selectLine, prevSelectLine) != 0);
   bool updateSd = (strcmp(sdLine, prevSdLine) != 0);
 
-  if (!updateSsid && !updateSelect && !updateSd) {
+  if (!updateSelect && !updateSd) {
     return;
   }
 
   static char updateBuffer[512];
   size_t offset = 0;
-
-  if (updateSsid) {
-    term_appendMoveAndClearLine(updateBuffer, sizeof(updateBuffer), &offset,
-                                menuRowSsid);
-    term_appendText(updateBuffer, sizeof(updateBuffer), &offset, ssidLine);
-  }
 
   if (updateSelect) {
     term_appendMoveAndClearLine(updateBuffer, sizeof(updateBuffer), &offset,
@@ -1034,7 +786,6 @@ void term_refreshMenuLiveInfo(void) {
     }
   }
 
-  snprintf(prevSsidLine, sizeof(prevSsidLine), "%s", ssidLine);
   snprintf(prevSelectLine, sizeof(prevSelectLine), "%s", selectLine);
   snprintf(prevSdLine, sizeof(prevSdLine), "%s", sdLine);
 

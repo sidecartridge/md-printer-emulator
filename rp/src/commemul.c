@@ -21,7 +21,8 @@
 // header, command, size, token and checksum words plus
 // MAX_PROTOCOL_PAYLOAD_SIZE (2,112 bytes) of payload: about 1,060 samples, and
 // a whole send with its retries is 4 x 1,060 = 4,240. The longest wait without
-// a drain is bringing Wi-Fi up (about 0.9 s), which that covers. 2^13 words
+// a drain is starting the Pico W's Wi-Fi chip for its LED (the boot's last 0.6
+// s), which that covers. 2^13 words
 // (4,096) would be just short, so 2^14 (8,192 samples, 16 KB): about two whole
 // sends. A lap beyond that is counted in commOverruns and its samples dropped.
 // The ring must be aligned to its size for the DMA's address wrap, and a

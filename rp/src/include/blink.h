@@ -15,7 +15,6 @@
 #include "pico/stdlib.h"
 
 #ifdef CYW43_WL_GPIO_LED_PIN
-#include "network.h"
 #include "pico/cyw43_arch.h"
 #endif
 
@@ -62,5 +61,12 @@ void blink_on();
  * to turn off the blink.
  */
 void blink_toogle();
+
+/**
+ * @brief Services the Wi-Fi chip's driver, which the Pico W's LED is on: in
+ * poll mode it must be polled. Nothing until the LED has been used, and
+ * nothing on a board whose LED is a GPIO.
+ */
+void blink_poll();
 
 #endif  // BLINK_H

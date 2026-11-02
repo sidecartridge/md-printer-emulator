@@ -15,7 +15,6 @@ RP; flash the real one afterwards (`tools/dev/flash.sh debug`).
     python3 tools/dev/st_harness.py --no-build      # reuse the last build and flash
     python3 tools/dev/st_harness.py --no-build --no-flash --no-reboot   # run again at once
     python3 tools/dev/st_harness.py --label before  # name the report
-    python3 tools/dev/st_harness.py --connect-race  # the ST's boot commands during the RP's Wi-Fi connect
     python3 tools/dev/st_harness.py --mste 16c      # a Mega STE at 16 MHz with the cache for the run
 
 The tests: T0 what the cartridge hands over (the return address into TOS, the
@@ -186,45 +185,6 @@ def regs(mask):
     return ",".join(r for i, r in enumerate(REGS) if mask >> i & 1) or "none"
 
 
-def stamp(line):
-    h, m, rest = line[11:23].split(":")
-    return int(h) * 3600 + int(m) * 60 + float(rest)
-
-
-def connect_race(elf, sent, label):
-    """Reboot the ST and then the RP: the ST's boot commands (detect_hw,
-    get_tos_version) arrive while the RP is joining Wi-Fi."""
-    print("reboot the ST and the RP together")
-    cur = LogCursor()
-    write_sentinel(sent, CMD_RESET)
-    time.sleep(0.3)
-    run(sys.executable, os.path.join(DEV, "swd.py"), "reset")
-    ok = cur.wait(r"Start the app loop", 200)
-    back = wait_st_menu(elf, 60)
-    lines = cur.new().splitlines()
-    def first(pat):
-        for l in lines:
-            if re.search(pat, l):
-                return stamp(l)
-        return None
-    t = {"connect_start": first(r"Connecting to SSID"), "connected": first(r"Connected\. Check"),
-         "loop": first(r"Start the app loop"),
-         "var0": first(r"Setting shared variable 0 "), "var1": first(r"Setting shared variable 1 ")}
-    base = t["connect_start"]
-    rel = {k: (round(v - base, 3) if v is not None and base is not None else None) for k, v in t.items()}
-    print(f"  seconds from the start of the Wi-Fi connect: {rel}")
-    during = None not in (t["var0"], t["connected"]) and t["var0"] < t["connected"]
-    gap = round(t["var1"] - t["var0"], 3) if None not in (t["var0"], t["var1"]) else None
-    print(f"  ST boot commands during the connect: {during}; var0 -> var1: {gap} s; "
-          f"RP loop reached: {ok}; ST back in menu: {back}")
-    report = os.path.join(DEV, "logs", f"st-harness-{label}-{time.strftime('%Y%m%d-%H%M%S')}.json")
-    with open(report, "w") as f:
-        json.dump({"label": label, "timeline": rel, "during_connect": during,
-                   "var0_to_var1_s": gap, "loop": ok, "st_back": back}, f, indent=2)
-    print(f"report: {report}")
-    return 0
-
-
 def reboot_st(elf, sent):
     """Reboot the ST through the sentinel so it runs the new cartridge code, and
     check it said hello; returns the shared variables and the boot trace."""
@@ -262,9 +222,6 @@ def main():
     ap.add_argument("--mste", choices=sorted(MSTE_SETTINGS),
                     help="on a Mega STE, the speed and cache for the run (with the build)")
     ap.add_argument("--label", default="run")
-    ap.add_argument("--connect-race", action="store_true",
-                    help="reboot the ST and the RP together, so the ST's boot "
-                         "commands land during the RP's Wi-Fi connect")
     args = ap.parse_args()
 
     if not args.no_build:
@@ -286,9 +243,6 @@ def main():
         print("the ST is in the setup menu with this cartridge code already: no reboot")
     else:
         svars, set_lines, boot_trace = reboot_st(elf, sent)
-
-    if args.connect_race:
-        return connect_race(elf, sent, args.label)
 
 
     print("run the test ([F]irmware)")

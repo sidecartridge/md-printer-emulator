@@ -260,8 +260,7 @@ python3 tools/dev/power_cycles.py                            # cold boots: menu 
   setting back before its closing reboot). A reset brings the machine back to 8 MHz with no
   cache, so the next handover reads that.
 
-  `--connect-race` instead resets the ST and the RP together, and times the ST's boot commands
-  against the RP's Wi-Fi connect. `--no-build --no-flash --no-reboot` runs the tests again at once
+  `--no-build --no-flash --no-reboot` runs the tests again at once
   on an ST still in the setup menu from a run. The test firmware stays on the RP, so flash the
   real one afterwards. The working tree is never touched.
 - `power_cycles.py` watches the log while you power-cycle the ST. For each boot it prints when the
