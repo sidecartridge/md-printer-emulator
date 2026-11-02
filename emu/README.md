@@ -107,7 +107,15 @@ tools/dev/make_floppy.sh FOLDER disk.st [LABEL]   # 720 KB, checked file by file
 tools/dev/make_acsi.sh FOLDER disk.img [MB]       # PPDRIVER, by ../atari-hd (ATARI_HD)
 tools/dev/make_bench_disks.sh                     # the tests' own, in tools/dev/builds/disks/
 tools/dev/st/build.sh                             # the bench's ST programs (tools/dev/st/*.s)
+tools/dev/make_test_disk.sh                       # every test program on one ACSI image, for a real ST
 ```
+
+`make_test_disk.sh` puts the programs the printing tests use, set up as the tests set them up
+but with their paths on C:, on one bootable 32 MB image (`builds/disks/printer-tests.img`; it
+holds commercial programs and is never committed). On an ACSI2STM it is `acsi2stm/hd0.img` at
+the root of the SD card. `C:\README.TXT` on it says what to print in each folder and the MD5 a
+debug build should log for the job (TOS 1.62). Pasti disks are read with `stx_to_st.py`, which
+reports the sectors a protection left unreadable (Degas Elite: tracks 80-81, past its files).
 
 `.ST`, `.MSA` and Pasti `.STX` images all load.
 
