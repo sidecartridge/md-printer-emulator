@@ -85,6 +85,9 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
   cardput PATH          an empty file PATH on the card (a file where the
                         firmware wants a folder: the card fails for it)
   cardnone PATTERN      FAILs if a file on the card matches PATTERN
+  cardfull FREE         the card full but FREE bytes: a 1 MB FAT volume
+                        (macOS hdiutil) over the run's sd/, filled with one
+                        file; its files are kept in card-full/ at the end
   cartexec watch|none   watch for the CPU running code in the cartridge
                         ($FA0000-$FAFFFF), then FAIL if it has since then,
                         with the registers at the first time (the hook runs
@@ -346,6 +349,7 @@ class Run:
         self.shot_count = 0
         self.pointer = None  # where the pointer is, once pinned
         self.report_extra = {}  # what steps add to report.json
+        self.card_volume = None  # cardfull's disk image, mounted on sd/
         tos = (ROOT / SETUPS[args.setup][1]).read_bytes()[0x1C:0x1E]
         self.tos_country = int.from_bytes(tos, "big") >> 1  # os_conf's country
     def frames_from_now(self, frames):
@@ -706,6 +710,49 @@ class Run:
         (self.run_dir / "sd" / path).parent.mkdir(parents=True, exist_ok=True)
         (self.run_dir / "sd" / path).write_bytes(b"")
 
+    def step_cardfull(self, free):
+        """The card full but FREE bytes: a 1 MB FAT volume mounted over the
+        run's sd/ (the firmware opens its files by path, so it writes there
+        from now on), its files copied onto it, then one file that leaves
+        FREE bytes free. release_card() unmounts it at the end."""
+        sd = self.run_dir / "sd"
+        image = self.run_dir / "card-full.dmg"
+        subprocess.run(["hdiutil", "create", "-size", "1m", "-fs", "MS-DOS FAT12",
+                        "-volname", "CARD", "-layout", "NONE", str(image)],
+                       check=True, capture_output=True)
+        shutil.copytree(sd, self.run_dir / "card-before", dirs_exist_ok=True)
+        subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", str(sd), str(image)],
+                       check=True, capture_output=True)
+        self.card_volume = image
+        shutil.copytree(self.run_dir / "card-before", sd, dirs_exist_ok=True)
+        # Filled until the volume refuses (its reported free space is more
+        # than a file can take), then FREE bytes given back, in clusters.
+        fs = os.statvfs(sd)
+        cluster = fs.f_frsize
+        with open(sd / "FILLER.BIN", "wb", buffering=0) as f:  # a refused write is not kept
+            try:
+                while f.write(bytes(cluster)):
+                    pass
+            except OSError:
+                pass
+            size = f.seek(0, os.SEEK_END) // cluster * cluster
+            give = -(-int(free) // cluster) * cluster
+            if give > size:
+                raise StepFailed(f"cardfull {free}: the volume holds only {size} bytes")
+            f.truncate(size - give)
+        fs = os.statvfs(sd)
+        self.report_extra["cardfull"] = {"free": fs.f_bavail * fs.f_frsize, "cluster": fs.f_frsize}
+
+    def release_card(self):
+        """cardfull's volume: its files into card-full/, then unmounted."""
+        if self.card_volume is None:
+            return
+        sd = self.run_dir / "sd"
+        shutil.copytree(sd, self.run_dir / "card-full", dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns(".*"))
+        subprocess.run(["hdiutil", "detach", str(sd)], capture_output=True)
+        self.card_volume = None
+
     def step_cardnone(self, pattern):
         """FAILs if a file on the firmware's card matches PATTERN."""
         found = sorted(str(f.relative_to(self.run_dir / "sd")) for f in (self.run_dir / "sd").glob(pattern))
@@ -952,6 +999,7 @@ def main():
             pass
     finally:
         hatari.stop()
+        run.release_card()
     if args.acsi:
         report["acsi_files"] = acsi_files(run_dir / Path(args.acsi).name, run_dir / "acsi-files")
         print(f"  ACSI image's files in acsi-files/: {report['acsi_files']}")

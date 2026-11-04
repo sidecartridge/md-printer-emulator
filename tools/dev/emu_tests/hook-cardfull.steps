@@ -1,0 +1,19 @@
+# A card that fills up in the middle of a job does not hold up the ST: with
+# 2 KB left on the card, PRFILES still prints our ESC/P pages (2962 bytes) to
+# the end, and the RP answers every block (the hook drops nothing). The RP
+# writes what fits, says the write failed, and loses the rest of the job; the
+# job never gets its final name.
+@disk-a tools/dev/builds/disks/escp.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+cardfull 2048
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+key 0x39
+hookdone 2962 3000
+log "printer: write failed" 100
+wait 600
+cardnone PRINTER/*.PRN
+hookstate

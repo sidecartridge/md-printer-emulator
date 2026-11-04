@@ -80,6 +80,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-escp` | our ESC/P pages reach the RP's card (`PRINTER/00000001.PRN`) byte for byte |
 | `hook-jobs` | each printing is a job, numbered; the number survives a cold reset (the RP's flash) |
 | `hook-nocard` | a card that fails: the ST prints to the end, the RP loses the job and says so |
+| `hook-cardfull` | a card that fills up mid-job (`cardfull`: a 1 MB FAT volume over the card's folder, macOS): the ST prints to the end, the job stays a `.TMP` with what fit |
 | `hook-romfree` | once the hook is installed, the CPU runs no code in the cartridge (it is resident in RAM) |
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
 | `impossible` | must FAIL: the harness can fail |
