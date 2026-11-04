@@ -7,9 +7,11 @@
 #
 #   launchers/  floppies whose desktop starts a program from drive B by itself
 #               (make_launcher.py): stwriter, gfabasic, wordplus (medium),
-#               degas, desktop (no program: a window on A:, PRINT.TXT), signum
+#               degas, desktop (no program: a window on A:, PRINT.TXT),
+#               desktop-set128 (the same with SET128.TXT, st/make_set128.py), signum
 #   disks/      work copies of programs' own disks (disk_copy.py):
 #               wordplus-fx.st  1st Word Plus with PRINTER.CFG = its EPSON_FX.CFG
+#               wordplus-set128.st  the same with DOCS\SET128.TXT
 #               easydraw.st     Easy Draw booting itself (GDOS from its AUTO)
 #               calamus.st      Calamus booting itself, CALAMUS.SET's folders on A:
 #               xcontrol.st     XControl with its PRINTER.CPX at the root
@@ -37,11 +39,15 @@ launcher "$L/gfabasic.st" 'B:\GFABASIC\GFABASIC.PRG'
 launcher "$L/wordplus.st" 'B:\WORDPLUS.PRG' --res medium
 launcher "$L/degas.st" 'B:\DEGELITE.PRG'
 launcher "$L/desktop.st" --files "$DEV/st/documents/desktop" --window 'A:\*.*'
+python3 "$DEV/st/make_set128.py" "$WORK/set128" > /dev/null
+launcher "$L/desktop-set128.st" --files "$WORK/set128" --window 'A:\*.*'
 launcher "$L/signum.st" 'C:\SIGNUM3\SIGNUM3.PRG'
 
 # 1st Word Plus with its Epson FX table.
 copy "$P/1st_word_plus_2_02/files/1stWordPlus1.MSA" "$D/wordplus-fx.st" \
   --copy 'PRINTERS\EPSON_FX.CFG=PRINTER.CFG'
+copy "$P/1st_word_plus_2_02/files/1stWordPlus1.MSA" "$D/wordplus-set128.st" \
+  --copy 'PRINTERS\EPSON_FX.CFG=PRINTER.CFG' --put "$WORK/set128/SET128.TXT=DOCS\SET128.TXT"
 
 # Easy Draw: GDOS loads from the boot disk's AUTO, so the disk itself boots.
 python3 "$DEV/make_launcher.py" "$WORK/easydraw" 'A:\EASYDRAW.PRG' --res medium --inf-only > /dev/null

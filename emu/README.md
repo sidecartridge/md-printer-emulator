@@ -76,6 +76,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `floppy-auto` | a floppy's `AUTO` program runs after the cartridge, then the desktop |
 | `print-paths` | stock Hatari: one line through each TOS print path (`st/prpaths.s`) |
 | `print-...` | a program prints (the desktop, Alt-Help, ST Writer, 1st Word Plus, GFA BASIC, Degas Elite, GDOS, XControl's printer settings, our ESC/P pages, Calamus, Signum 3), and `printwatch` says whether through TOS |
+| `print-desktop-set128`, `print-wordplus-set128` | every Atari character from 128 to 255 (`st/make_set128.py`) through the desktop's Print (the bytes as they are) and 1st Word Plus' Epson FX table (international sets, overstrikes, spaces) |
 | `hook-capture`, `hook-off`, `hook-reset`, `hook-stwriter` | the printer hook: installed, switched off, after a reset, a GEM program into it |
 | `hook-escp` | our ESC/P pages reach the RP's card (`PRINTER/00000001.PRN`) byte for byte |
 | `hook-jobs` | each printing is a job, numbered; the number survives a cold reset (the RP's flash) |

@@ -1,0 +1,32 @@
+# 1st Word Plus 2.02 with its Epson FX table printing SET128.TXT, every Atari
+# character from 128 to 255 (tools/dev/st/make_set128.py): what a printer
+# table sends for the characters above ASCII (international sets, substitutes).
+# As print-wordplus-fx, with SET128.TXT in DOCS on the work copy of disk 1.
+@printer
+@disk-a tools/dev/builds/launchers/wordplus.st
+@disk-b tools/dev/builds/disks/wordplus-set128.st
+wait 100
+key 0x01
+wait 1500
+mouse 30 30
+click left 2
+wait 25
+mouse 411 169
+click left 2
+wait 100
+mouse 72 4
+mouse 114 23
+click left 2
+wait 150
+mouse 234 96
+click left 2
+wait 100
+key 0x01
+type set128.txt
+key 0x1c
+wait 200
+shot printopts
+printwatch
+mouse 352 169
+click left 2
+printer 100 6000
