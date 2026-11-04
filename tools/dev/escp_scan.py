@@ -5,6 +5,7 @@ Walks a stream as a 9-pin Epson printer reads it and counts each control code
 and ESC sequence, skipping the data of bit images and user-defined
 characters, so their bytes are never taken for commands. A sequence it does
 not know is reported with its offset: the stream cannot be followed past it.
+Printable ASCII is counted as "(text)", each character above 127 on its own.
 
     escp_scan.py FILE...            # a table per file
     escp_scan.py --sum FILE...      # one table for all of them
@@ -57,8 +58,10 @@ def scan(data):
                     counts[CONTROL[b]] += 1
                 elif b < 0x20:
                     counts[f"0x{b:02X}"] += 1
-                else:
+                elif b < 0x80:
                     counts["(text)"] += 1
+                else:  # each character above 127 on its own: the set decides it
+                    counts[f"(char 0x{b:02X})"] += 1
                 i += 1
                 continue
             start = i
