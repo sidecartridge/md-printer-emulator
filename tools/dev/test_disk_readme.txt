@@ -46,7 +46,9 @@ C:\STWRITER      STWRITER.PRG: L, TEMPLATE.TXT, Return; P, the print
 C:\GFA           GFABASIC\GFABASIC.PRG: type the two lines
                      lprint "gfa basic lprint test"
                      hardcopy
-                 and run them (Shift F10). HARDCOPY dumps GFA's screen.
+                 and run them (Shift F10). HARDCOPY dumps GFA's screen,
+                 mouse pointer included: the job matches only with the
+                 pointer where the emulated run had it (mid-screen).
                  Expected: 3485 bytes,
                  MD5 ef5d9450e7335285d610b601168f5b49
 
