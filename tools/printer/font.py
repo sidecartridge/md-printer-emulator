@@ -7,6 +7,7 @@ specimen.
                                     and both, at 1,200 dpi, a dot 1/72 inch
   font.py chart OUT.png             every glyph from 0x20 to 0xff, sixteen to
                                     a line, in draft
+  font.py c [OUT.c]                 the font as C (rp/src/fx80/font.c)
 
 The rules: nine rows of eleven positions, '#' or '.'; no pin fired at two
 neighbouring positions; the last two positions blank, unless the row fires
@@ -130,9 +131,28 @@ def chart(glyphs, out):
     draw(glyphs, out, lines, line=1 / 6, label="0x20-0xff, sixteen to a line")
 
 
+def to_c(glyphs):
+    """Eleven columns per code, bit n the pin n + 1 (bit 0 the top pin); codes
+    with no glyph are blank."""
+    last = max(glyphs)
+    out = ["// The FX-80 renderer's font, from font.txt by tools/printer/font.py c:",
+           "// do not edit. Eleven columns per code, 1/120 inch apart at 10 cpi;",
+           "// bit n of a column fires pin n + 1 (bit 0 the top pin).",
+           "#include \"fx80.h\"", "",
+           f"const uint16_t fx80_font[FX80_FONT_CODES][FX80_GLYPH_COLUMNS] = {{"]
+    for code in range(last + 1):
+        rows = glyphs.get(code)
+        if rows is None:
+            continue
+        cols = [sum(1 << pin for pin in range(ROWS) if rows[pin][col] == "#") for col in range(COLS)]
+        out.append(f"    [0x{code:02x}] = {{" + ", ".join(f"0x{c:03x}" for c in cols) + "},")
+    out.append("};")
+    return "\n".join(out) + "\n", last + 1
+
+
 def main():
     args = sys.argv[1:]
-    if not args or args[0] not in ("check", "specimen", "chart"):
+    if not args or args[0] not in ("check", "specimen", "chart", "c"):
         sys.exit(__doc__)
     if args[0] == "check":
         path = Path(args[1]) if len(args) > 1 else FONT
@@ -141,11 +161,17 @@ def main():
             print(f"{path}: {e}")
         print(f"{path}: {len(glyphs)} glyphs, " + ("FAIL" if errors else "ok"))
         sys.exit(1 if errors else 0)
-    if len(args) < 2:
-        sys.exit(__doc__)
     glyphs, errors = load(FONT)
     if errors:
         sys.exit("\n".join(errors))
+    if args[0] == "c":
+        text, codes = to_c(glyphs)
+        out = Path(args[1]) if len(args) > 1 else FONT.with_name("font.c")
+        out.write_text(text)
+        print(f"{out}: {codes} codes")
+        return
+    if len(args) < 2:
+        sys.exit(__doc__)
     if args[0] == "chart":
         chart(glyphs, args[1])
     else:
