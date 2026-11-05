@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   Fx80Sink sink = {on_dot, on_page, &re};
-  fx80_init(&printer, &sink, length);
+  fx80_init(&printer, &sink, width, length);
   int c;
   while ((c = fgetc(in)) != EOF) fx80_byte(&printer, (uint8_t)c);
   fclose(in);

@@ -127,7 +127,7 @@ static uint16_t pins_from_byte(uint8_t b) {
 
 static void strike(Fx80 *p, int32_t x, int32_t y) {
   if (y < 0 || x < 0) return;
-  p->sink.dot(p->sink.ctx, x, y);
+  p->sink.dot(p->sink.ctx, p->originX + x, p->originY + y);
   p->pageDirty = true;
 }
 
@@ -653,10 +653,15 @@ static void text_byte(Fx80 *p, uint8_t b) {
 
 // ---- Entry points ------------------------------------------------------
 
-void fx80_init(Fx80 *p, const Fx80Sink *sink, int32_t paperLength) {
+void fx80_init(Fx80 *p, const Fx80Sink *sink, int32_t paperWidth,
+               int32_t paperLength) {
   memset(p, 0, sizeof(*p));
   p->sink = *sink;
-  p->defaultFormLength = (paperLength / SIXTH_INCH) * SIXTH_INCH;
+  p->originX =
+      paperWidth > LINE_WIDTH_MAX ? (paperWidth - LINE_WIDTH_MAX) / 2 : 0;
+  p->originY = SIXTH_INCH;
+  p->defaultFormLength =
+      ((paperLength - p->originY) / SIXTH_INCH) * SIXTH_INCH;
   reset_modes(p);
   p->state = ST_TEXT;
 }

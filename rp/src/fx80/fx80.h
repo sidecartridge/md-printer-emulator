@@ -4,7 +4,8 @@
  *              dots the printer's pins would strike come out, page by page.
  *
  * Positions: x in 1/1440 inch from the paper's left edge, y in 1/432 inch
- * from the top of the page. Every pitch, graphics density and line spacing of
+ * from the top of the page (what the sink gets; inside, from the line's
+ * column 0 and the top of the form). Every pitch, graphics density and line spacing of
  * the FX-80 falls on that grid: the pins are 1/72 inch apart (6 units), a
  * column of a pica character 1/120 inch (12 units), a 240 dpi graphics column
  * 6 units, a 1/216 inch line feed 2 units.
@@ -58,6 +59,8 @@ typedef struct {
 
 typedef struct {
   Fx80Sink sink;
+  int32_t originX;  // where the line's column 0 is on the paper
+  int32_t originY;  // where the form starts on the paper
   int32_t defaultFormLength;  // y units
 
   // The parser.
@@ -125,10 +128,14 @@ typedef struct {
 
 /**
  * @brief Powers the printer on: its modes, the top of the form.
- * @param paperLength the paper's length in y units: the form length starts
- * as the whole lines of 1/6 inch that fit it (A4: 70 lines, Letter: 66).
+ * @param paperWidth, paperLength the paper, in x and y units. The printer's
+ * 8-inch line is centred on it, and the form starts 1/6 inch below its top
+ * edge, as a sheet loaded with its edge just above the head; the form length
+ * starts as the whole lines of 1/6 inch that fit below that (A4: 69 lines,
+ * Letter: 65).
  */
-void fx80_init(Fx80 *p, const Fx80Sink *sink, int32_t paperLength);
+void fx80_init(Fx80 *p, const Fx80Sink *sink, int32_t paperWidth,
+               int32_t paperLength);
 
 /**
  * @brief One byte from the computer.
