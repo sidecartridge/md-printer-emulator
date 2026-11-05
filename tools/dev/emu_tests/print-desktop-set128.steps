@@ -1,0 +1,25 @@
+# The desktop's Print of SET128.TXT, every Atari character from 128 to 255
+# (tools/dev/st/make_set128.py): what a program that sends a file's bytes as
+# they are gives the printer for the characters above ASCII. As print-desktop,
+# on a launcher with SET128.TXT where print-desktop's has PRINT.TXT (the same
+# place in the window).
+@printer
+@disk-a tools/dev/builds/launchers/desktop-set128.st
+wait 100
+key 0x01
+desktop 2500
+wait 50
+mouse 280 180
+click left 2
+wait 25
+mouse 180 51
+click left 2
+wait 25
+mouse 88 5
+mouse 88 14
+click left 2
+wait 100
+printwatch
+mouse 160 127
+click left 2
+printer 100 3000

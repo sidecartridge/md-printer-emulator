@@ -75,3 +75,7 @@ __pycache__/
 # EmuMD: the emulated microSD card and the TOS images linked from elsewhere
 emu/sd/
 emu/tos/
+
+# Captures of commercial programs for the FX-80 renderer's host test: never
+# committed, kept on this computer only
+tools/printer/local/

@@ -274,4 +274,16 @@ python3 tools/dev/power_cycles.py                            # cold boots: menu 
 - `stackdepth.py` computes worst-case stack depth from those builds (static call edges only, so
   treat its answer as a floor).
 
+## Printer streams
+
+- `escp_scan.py FILE...` lists the ESC/P commands a printer stream uses, with their counts: the
+  emulated tests' `printer.out` and the jobs on the card. It skips the data of bit images and
+  user-defined characters, so their bytes are never taken for commands, and stops with the
+  offset at a sequence it does not know. `--sum` gives one table for all the files.
+- `printertopdf.sh FILE OUT` renders a stream with PrinterToPDF (RWAP Software, GPL-3.0), a
+  second opinion for the FX-80 renderer: as a 9-pin printer with its Atari character set, A4, a
+  PDF per page in `OUT/pdf/`. It runs in Docker, built from `printertopdf/Dockerfile` at a fixed
+  commit the first time (about 2 minutes). Its pages are a comparison, not the expected result,
+  and none of its code goes into the firmware.
+
 `logs/` and `builds/` are generated here and are gitignored.
