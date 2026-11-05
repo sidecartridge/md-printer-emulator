@@ -68,7 +68,7 @@ def modes():
     out += ESC + b"p1" + line("Proportional: Illinois minimum, wide WM.") + ESC + b"p0"
     for n, name in ((0x01, "elite"), (0x04, "compressed"), (0x05, "elite+compressed = elite"),
                     (0x08, "emphasized"), (0x09, "elite+emphasized = elite"),
-                    (0x0C, "compressed+emphasized = emphasized"), (0x10, "double-strike"),
+                    (0x0C, "compressed+emphasized = both"), (0x10, "double-strike"),
                     (0x20, "expanded"), (0x24, "compressed expanded")):
         out += ESC + b"!" + bytes([n]) + line(f"ESC ! {n}: {name}")
     out += ESC + b"!" + b"\x00"

@@ -7,8 +7,10 @@
  *              italic copies, and international set 9 is Norway's.
  *
  * Mode priorities, as the FX-80 sets them: proportional over elite over
- * emphasized over compressed; proportional prints emphasized and never
- * double-strike. Super- and subscript print in two passes, 1/144 inch apart,
+ * emphasized and compressed; proportional prints emphasized and never
+ * double-strike. One exception: compressed and emphasized together print
+ * both, at 17 cpi and bold, where the FX-80 drops compressed. Programs send
+ * them together for tables meant to fit the line (ST Writer). Super- and subscript print in two passes, 1/144 inch apart,
  * which the glyph's rows at 1/144 inch are; double-strike adds nothing to
  * them. Expanded prints every dot twice, the second one column of the
  * unexpanded pitch further on.
@@ -144,7 +146,7 @@ static int32_t char_step(const Fx80 *p) {
     step = 12;
   } else if (p->elite) {
     step = 10;  // 1/144 inch
-  } else if (p->compressed && !p->emphasized) {
+  } else if (p->compressed) {
     step = 7;  // 17.14 cpi
   }
   if (p->expanded || p->expandedLine) step *= 2;
