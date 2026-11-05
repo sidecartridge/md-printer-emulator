@@ -139,6 +139,8 @@ target_sources(${PROJECT_NAME} PRIVATE
         fx80/font.c
         fx80/fx80.c
         fx80/raster.c
+        pdf/deflate.c
+        pdf/pdf.c
         md5/md5.c
         settings/settings.c)
 

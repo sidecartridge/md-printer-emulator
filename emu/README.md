@@ -84,7 +84,8 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-cardfull` | a card that fills up mid-job (`cardfull`: a 1 MB FAT volume over the card's folder, macOS): the ST prints to the end, the job stays a `.TMP` with what fit |
 | `hook-romfree` | once the hook is installed, the CPU runs no code in the cartridge (it is resident in RAM) |
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
-| `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`) |
+| `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`), the PDF equals `tools/printer/render`'s byte for byte, and the job is deleted |
+| `pages-recovery` | the RP restarts mid-job: at boot the job is closed and rendered, an unfinished PDF deleted, and the next job takes the next number |
 | `impossible` | must FAIL: the harness can fail |
 
 `tools/dev/hook_fidelity.sh TEST SETUP` runs a printing test twice on the firmware after
@@ -93,6 +94,11 @@ gets the reference; switched on, the RP's jobs on the card, in order, must hold 
 A job is a file only once it has ended, so with the hook on a test's `printer` step becomes
 `cardfile`, which waits until the hook has taken nothing for the same quiet time, its buffer is
 empty and the jobs hold every byte it took.
+
+The firmware deletes a job once its PDF is written unless its `KEEP_RAW` setting is on, and
+the tests compare the jobs' bytes: on the fork the harness first sets it (`setting KEEP_RAW
+true`, through `emu/template_extra.c`), unless a test says `@keep-raw off` or the command line
+`--keep-raw off`.
 
 `--fast` runs Hatari as fast as it goes while the firmware keeps the host's time: tests that
 time a reset or a boot in frames (`hook-jobs`, `hook-reset`) fail with it; run them without.

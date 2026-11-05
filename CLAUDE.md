@@ -169,13 +169,18 @@ What a program prints on the ST becomes bytes on the RP:
   `IDLE_SECONDS` (writing flash stops the main loop, and the ST waits for its answer meanwhile);
   a number already on the card is skipped, so a power cut before the store reuses none. A card that fails loses the job's bytes on the RP's side (the
   ST is answered as ever) and counts them.
-- **Pages** (`rp/src/pages.c`, `rp/src/fx80/`): once a job closes, the main loop reads it back
-  from the card, 512 bytes at a time and about 1 ms a pass, and renders it as an Epson FX-80
-  prints it (`fx80.c`: ESC/P, codes 128-255 as the Atari's characters) into a 1-bit A4 page at
-  240 x 216 dpi, through a band of 128 rows (`raster.c`; the page is 627 KB). A debug build logs
-  each page's MD5, which `tools/printer/render` gives for the same job on the computer;
-  `tools/printer/test.sh` is the host test (golden page MD5s of our own streams). Nothing is
-  written yet: the PDF comes next.
+- **Pages** (`rp/src/pages.c`, `rp/src/fx80/`, `rp/src/pdf/`): once a job closes, the main loop
+  reads it back from the card, 512 bytes at a time and about 1 ms a pass, and renders it as an
+  Epson FX-80 prints it (`fx80.c`: ESC/P, codes 128-255 as the Atari's characters) into a 1-bit
+  A4 page at 240 x 216 dpi, through a band of 128 rows (`raster.c`; the page is 627 KB). Each row
+  goes straight into the job's PDF (`pdf.c`), one image a page, compressed with Flate by our own
+  encoder (`deflate.c`: matches within the last 1 KB, fixed Huffman codes, 8 KB of RAM). The PDF
+  is `nnnnnnnn.PDT` until it is whole, then `nnnnnnnn.pdf`, and the job's `.PRN` is deleted
+  unless the `KEEP_RAW` setting is on. At boot, `pages_init()` closes a `.TMP` a reboot cut
+  short, deletes a `.PDT` and renders every `.PRN` without its PDF. A debug build logs each
+  page's MD5 and the PDF's size, which `tools/printer/render [--pdf]` gives for the same job on
+  the computer; `tools/printer/test.sh` is the host test (golden page MD5s of our own streams,
+  each PDF checked with poppler by `pdfcheck.py`).
 
 ### Shared 64 KB cartridge region
 The Atari ST sees a 64 KB window at `$FA0000`–`$FAFFFF` (mirrored RP-side at `0x20030000`). This is the **single source of truth** for any cross-target data layout — both sides derive every offset symbolically from constants in `rp/src/include/chandler.h` (RP-side) and `target/atarist/src/main.s` (m68k side). **Apps must never hard-code an address inside this region** — always reference the named offset/symbol.

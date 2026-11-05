@@ -18,6 +18,9 @@
  *      svar.req  holds "INDEX VALUE" (hex): shared variable INDEX becomes
  *                VALUE, as the firmware's SET_SHARED_VAR writes it; answers
  *                svar.done. A test's way to flip a switch the firmware sets.
+ *      setting.req  holds "KEY VALUE": the app's setting KEY becomes VALUE
+ *                and the settings are saved, as the setup menu's put and save
+ *                do; answers setting.done, which holds "ok" or why not.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -26,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "aconfig.h"
 #include "chandler.h"
 #include "display.h"
 #include "display_term.h"
@@ -164,6 +168,38 @@ static void writeSharedVar(const char *path) {
   if (done) fclose(done);
 }
 
+static void writeSetting(const char *path) {
+  char req[1024];
+  snprintf(req, sizeof(req), "%s/setting.req", requestDir);
+  char key[SETTINGS_MAX_KEY_LENGTH] = {0};
+  char value[SETTINGS_MAX_VALUE_LENGTH] = {0};
+  const char *result = "no KEY VALUE";
+  FILE *f = fopen(req, "r");
+  if (f && fscanf(f, "%29s %95s", key, value) == 2) {
+    SettingsContext *ctx = aconfig_getContext();
+    SettingsConfigEntry *entry = settings_find_entry(ctx, key);
+    int err = -1;
+    if (!entry) {
+      result = "no such setting";
+    } else if (entry->dataType == SETTINGS_TYPE_BOOL) {
+      err = settings_put_bool(ctx, key, strcmp(value, "true") == 0);
+    } else if (entry->dataType == SETTINGS_TYPE_INT) {
+      err = settings_put_integer(ctx, key, atoi(value));
+    } else {
+      err = settings_put_string(ctx, key, value);
+    }
+    if (entry) {
+      result = (err == 0 && settings_save(ctx, true) >= 0) ? "ok" : "failed";
+    }
+  }
+  if (f) fclose(f);
+  FILE *done = fopen(path, "w");
+  if (done) {
+    fprintf(done, "%s\n", result);
+    fclose(done);
+  }
+}
+
 /* Answers one request: writes its answer under a temporary name, renames it,
  * then deletes the request, so the harness never reads half an answer. */
 static void answer(const char *dir, const char *name, const char *out,
@@ -194,4 +230,5 @@ void select_poll(void) {
   answer(dir, "text.req", "text.txt", writeText);
   answer(dir, "rom4.req", "rom4.bin", writeRom4);
   answer(dir, "svar.req", "svar.done", writeSharedVar);
+  answer(dir, "setting.req", "setting.done", writeSetting);
 }

@@ -24,7 +24,8 @@ a test's "@disk-a PATH", "@disk-b PATH" or "@acsi PATH" line gives the run that
 disk, relative to the repository ($PROGRAM_DISKS: the downloaded programs'
 disks, by default /Volumes/MacData/md-printer-emulator-disks), unless the
 command line does; "@hatari
-stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those options):
+stock", "@printer", "@monitor mono", "@memsize N", "@mouse-step N" and "@keep-raw
+off" set those options):
 
   wait FRAMES           let FRAMES frames pass
   key KEY [FRAMES]      press and release a key, in one event; with FRAMES,
@@ -72,6 +73,8 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         and a VBL slot reach it
   svar INDEX VALUE      shared variable INDEX becomes VALUE (hex), as the
                         firmware writes it (fork only)
+  setting KEY VALUE     the app's setting KEY becomes VALUE, saved, as the
+                        setup menu's put and save do (fork only)
   cardfile PATTERN NBYTES FRAMES [QUIET]
                         wait until the printer hook has taken NBYTES since
                         the ST booted, then nothing for QUIET frames (500),
@@ -664,6 +667,19 @@ class Run:
         os.replace(self.run_dir / "requests" / "svar.req.tmp", self.run_dir / "requests" / "svar.req")
         self.wait_for(100, lambda: done.exists(), "the firmware's answer to svar")
 
+    def step_setting(self, key, value):
+        """The app's setting KEY becomes VALUE, saved (emu/template_extra.c's
+        setting request)."""
+        self.need_fork("setting")
+        done = self.run_dir / "requests" / "setting.done"
+        done.unlink(missing_ok=True)
+        (self.run_dir / "requests" / "setting.req.tmp").write_text(f"{key} {value}\n")
+        os.replace(self.run_dir / "requests" / "setting.req.tmp", self.run_dir / "requests" / "setting.req")
+        self.wait_for(1500, lambda: done.exists(), "the firmware's answer to setting")
+        result = done.read_text().strip()
+        if result != "ok":
+            raise StepFailed(f"setting {key} {value}: {result}")
+
     def wait_hook(self, nbytes, frames, quiet):
         """Waits until the printer hook has taken at least NBYTES bytes since
         the ST booted, then until it has taken nothing for QUIET frames;
@@ -849,6 +865,8 @@ def load_steps(args):
                     args.memsize = int(value.strip())
                 elif attr == "mouse_step":
                     args.mouse_step = int(value.strip())
+                elif attr == "keep_raw":
+                    args.keep_raw = value.strip()
                 else:
                     raise SystemExit(f"{path.name}: unknown option {line}")
             elif line and not line.startswith("#"):
@@ -867,6 +885,14 @@ def load_steps(args):
             # What reaches the printer port with the hook off reaches the card.
             steps = [re.sub(r"^printer (\d+ \d+(?: \d+)?)$",
                             r"cardfile PRINTER/*.PRN \1", st) for st in steps]
+    if args.hatari == "fork" and args.keep_raw == "on":
+        # The tests compare the jobs' bytes: the firmware deletes a job once
+        # its PDF is written, unless KEEP_RAW is on. After what a test puts
+        # on the card before the firmware boots: the setting waits for it.
+        first = 0
+        while first < len(steps) and steps[first].startswith("cardput "):
+            first += 1
+        steps.insert(first, "setting KEEP_RAW true")
     return steps
 
 
@@ -933,6 +959,9 @@ def main():
     ap.add_argument("--hook", choices=("on", "off"), default="on",
                     help="with --via-firmware: off clears the printer's switch first, so the "
                          "printer port gets what the hook would")
+    ap.add_argument("--keep-raw", choices=("on", "off"), default="on",
+                    help="(fork) on: the firmware keeps each job's bytes beside its PDF (the "
+                         "KEEP_RAW setting), for the tests that compare them")
     ap.add_argument("--timeout", type=float, default=300, help="host seconds for the whole run")
     args = ap.parse_args()
 

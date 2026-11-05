@@ -17,6 +17,7 @@
 #define ACONFIG_PARAM_MODE "MODE"
 #define ACONFIG_PARAM_NEXT_JOB "NEXT_JOB"          // the next print job's number
 #define ACONFIG_PARAM_IDLE_SECONDS "IDLE_SECONDS"  // a job ends after this quiet
+#define ACONFIG_PARAM_KEEP_RAW "KEEP_RAW"  // keep a job's bytes beside its PDF
 
 #define ACONFIG_SUCCESS 0
 #define ACONFIG_INIT_ERROR -1
