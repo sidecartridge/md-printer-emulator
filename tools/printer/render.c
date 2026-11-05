@@ -3,10 +3,12 @@
  * page written as a PNG, with the MD5 of its pixels, the firmware's own C
  * built on the computer.
  *
- * Usage:  render [--letter] [--band ROWS] FILE OUTDIR
+ * Usage:  render [--letter] [--band ROWS] [--pdf OUT.pdf] FILE OUTDIR
  *         OUTDIR/page-001.png, ...; prints "page N WxH MD5" per page.
  *         --band draws through a band of ROWS rows, as the firmware does;
  *         the pages must come out the same as with the whole page.
+ *         --pdf also writes the pages as a PDF (rp/src/pdf), as the firmware
+ *         does.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +17,7 @@
 
 #include "fx80.h"
 #include "md5/md5.h"
+#include "pdf/pdf.h"
 #include "raster.h"
 
 typedef struct {
@@ -22,6 +25,7 @@ typedef struct {
   uint8_t *page;  // the page's rows as they are handed on, for the PNG
   MD5Context md5;
   const char *dir;
+  Pdf *pdf;  // NULL without --pdf
   int pages;
   int failed;
 } Render;
@@ -79,9 +83,20 @@ static void on_dot(void *ctx, int32_t x, int32_t y) {
   fx80_raster_dot(&((Render *)ctx)->raster, x, y);
 }
 
+static bool write_file(void *ctx, const uint8_t *data, uint32_t size) {
+  return fwrite(data, 1, size, ctx) == size;
+}
+
 static void on_row(void *ctx, int32_t row, const uint8_t *bits) {
   Render *re = ctx;
   if (row == 0) md5Init(&re->md5);
+  if (re->pdf) {
+    if (row == 0) {
+      pdf_pageBegin(re->pdf, re->raster.width, re->raster.height,
+                    FX80_RASTER_DPI_X, FX80_RASTER_DPI_Y);
+    }
+    pdf_row(re->pdf, bits);
+  }
   md5Update(&re->md5, (uint8_t *)bits, re->raster.stride);
   memcpy(re->page + (size_t)row * re->raster.stride, bits, re->raster.stride);
 }
@@ -91,6 +106,7 @@ static void on_page(void *ctx) {
   Fx80Raster *r = &re->raster;
   fx80_raster_finish(r, r->height);
   md5Finalize(&re->md5);
+  if (re->pdf) pdf_pageEnd(re->pdf);
   re->pages++;
   char path[1024];
   snprintf(path, sizeof(path), "%s/page-%03d.png", re->dir, re->pages);
@@ -106,18 +122,23 @@ static void on_page(void *ctx) {
 int main(int argc, char **argv) {
   int letter = 0;
   int32_t band = 0;
+  const char *pdfPath = NULL;
   int a = 1;
   for (; a < argc && argv[a][0] == '-' && argv[a][1] == '-'; a++) {
     if (strcmp(argv[a], "--letter") == 0) {
       letter = 1;
     } else if (strcmp(argv[a], "--band") == 0 && a + 1 < argc) {
       band = atoi(argv[++a]);
+    } else if (strcmp(argv[a], "--pdf") == 0 && a + 1 < argc) {
+      pdfPath = argv[++a];
     } else {
       break;
     }
   }
   if (argc - a != 2) {
-    fprintf(stderr, "usage: render [--letter] [--band ROWS] FILE OUTDIR\n");
+    fprintf(stderr,
+            "usage: render [--letter] [--band ROWS] "
+            "[--pdf OUT.pdf] FILE OUTDIR\n");
     return 2;
   }
   const char *file = argv[a];
@@ -138,6 +159,17 @@ int main(int argc, char **argv) {
     fprintf(stderr, "render: cannot read %s\n", file);
     return 1;
   }
+  static Pdf pdf;
+  FILE *pdfFile = NULL;
+  if (pdfPath) {
+    pdfFile = fopen(pdfPath, "wb");
+    if (!pdfFile) {
+      fprintf(stderr, "render: cannot write %s\n", pdfPath);
+      return 1;
+    }
+    pdf_begin(&pdf, write_file, pdfFile);
+    re.pdf = &pdf;
+  }
   fx80_raster_init(&re.raster, bits, w, h, rows, on_row, &re);
   Fx80Sink sink = {on_dot, on_page, &re};
   fx80_init(&printer, &sink, width, length);
@@ -145,6 +177,14 @@ int main(int argc, char **argv) {
   while ((c = fgetc(in)) != EOF) fx80_byte(&printer, (uint8_t)c);
   fclose(in);
   fx80_end(&printer);
+  if (pdfFile) {
+    bool written = pdf_end(&pdf);
+    if (fclose(pdfFile) != 0) written = false;
+    if (!written) {
+      fprintf(stderr, "render: cannot write %s\n", pdfPath);
+      re.failed = 1;
+    }
+  }
   if (re.raster.lost) {
     printf("lost %lu dots above the band\n", (unsigned long)re.raster.lost);
   }

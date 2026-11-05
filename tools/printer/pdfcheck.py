@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""pdfcheck.py: checks a PDF the renderer wrote against the pages it drew.
+
+Usage:  pdfcheck.py FILE.pdf PAGES
+        PAGES is render's output for the same stream ("page N WxH MD5" per
+        line). pdfinfo (poppler) must read the PDF without a word on stderr,
+        with as many pages, each the size of its pixels at 240 x 216 dpi.
+        Each image must inflate (zlib, its Adler-32 checked) to the page's
+        pixels, and pdfimages must decode it to them too, its PBM's unused
+        bits at the end of each row aside. Prints ok or FAIL and why.
+"""
+import hashlib
+import re
+import subprocess
+import sys
+import tempfile
+import zlib
+from pathlib import Path
+
+DPI_X, DPI_Y = 240, 216
+
+
+def fail(why):
+    print(f"FAIL {why}")
+    sys.exit(1)
+
+
+def main():
+    if len(sys.argv) != 3:
+        sys.exit(__doc__)
+    pdf, pages = sys.argv[1], sys.argv[2]
+    want = []
+    for line in open(pages):
+        _, _, size, md5 = line.split()
+        w, h = map(int, size.split("x"))
+        want.append((w, h, md5))
+
+    info = subprocess.run(["pdfinfo", "-f", "1", "-l", str(len(want)), pdf],
+                          capture_output=True, text=True)
+    if info.returncode or info.stderr.strip():
+        fail(f"pdfinfo: {info.stderr.strip() or info.returncode}")
+    count = int(re.search(r"^Pages:\s+(\d+)", info.stdout, re.M).group(1))
+    if count != len(want):
+        fail(f"{count} pages, not {len(want)}")
+    sizes = re.findall(r"^Page\s+\d+ size:\s+([\d.]+) x ([\d.]+) pts", info.stdout, re.M)
+    for n, ((w, h, _), (pw, ph)) in enumerate(zip(want, sizes), 1):
+        if abs(float(pw) - w * 72 / DPI_X) > 0.01 or abs(float(ph) - h * 72 / DPI_Y) > 0.01:
+            fail(f"page {n} is {pw} x {ph} pts, not {w}x{h} pixels at {DPI_X} x {DPI_Y} dpi")
+
+    data = Path(pdf).read_bytes()
+    streams = re.finditer(rb"/Subtype /Image .*?>>\nstream\n", data)
+    inflated = []
+    for m in streams:
+        end = data.index(b"\nendstream", m.end())
+        try:
+            inflated.append(hashlib.md5(zlib.decompress(data[m.end():end])).hexdigest())
+        except zlib.error as e:
+            fail(f"image {len(inflated) + 1}: {e}")
+    if inflated != [md5 for _, _, md5 in want]:
+        fail(f"the images inflate to other pixels: {inflated}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["pdfimages", pdf, f"{tmp}/img"], check=True)
+        decoded = []
+        for pbm in sorted(Path(tmp).glob("img-*.pbm")):
+            head, size, pixels = pbm.read_bytes().split(b"\n", 2)
+            w, h = map(int, size.split())
+            stride = (w + 7) // 8
+            pixels = bytearray(pixels)
+            unused = (0xff << (stride * 8 - w)) & 0xff
+            for row in range(h):
+                pixels[row * stride + stride - 1] &= unused
+            decoded.append(hashlib.md5(pixels).hexdigest())
+    if decoded != [md5 for _, _, md5 in want]:
+        fail(f"pdfimages decodes other pixels: {decoded}")
+    print(f"ok   {count} pages, {len(data)} bytes")
+
+
+if __name__ == "__main__":
+    main()

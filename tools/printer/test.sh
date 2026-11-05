@@ -5,7 +5,9 @@
 # and make_set128.py, the ST's; streams.py, the renderer's), renders each and
 # compares every page's MD5 with
 # golden/<stream>.pages, then again through the firmware's band of rows,
-# which must draw the same pages. The pages are left as PNGs in
+# which must draw the same pages. Each stream's PDF (rp/src/pdf) must read
+# without errors and hold exactly those pages (pdfcheck.py; poppler's pdfinfo
+# and pdfimages). The pages are left as PNGs and job.pdf in
 # tools/dev/builds/printer/<stream>/ to look at. Also checks that font.c is
 # font.txt's. Ends in PASS or FAIL.
 #
@@ -44,7 +46,7 @@ check() {
   local name="$1" file="$2" golden="$3" out="$BUILD/$1"
   mkdir -p "$out/band"
   find "$out" -name 'page-*.png' -delete
-  "$BUILD/render" "$file" "$out" > "$out/pages"
+  "$BUILD/render" --pdf "$out/job.pdf" "$file" "$out" > "$out/pages"
   if [ "$UPDATE" = 1 ]; then
     mkdir -p "$(dirname "$golden")"
     cp "$out/pages" "$golden"
@@ -58,8 +60,11 @@ check() {
   elif ! "$BUILD/render" --band "$BAND" "$file" "$out/band" | diff -q - "$out/pages" > /dev/null; then
     echo "FAIL $name: a band of $BAND rows draws other pages than the whole page"
     fail=1
+  elif ! pdf="$("$HERE/pdfcheck.py" "$out/job.pdf" "$out/pages")"; then
+    echo "FAIL $name: its PDF: ${pdf#FAIL }"
+    fail=1
   else
-    echo "ok   $name ($(wc -l < "$golden" | tr -d ' ') pages, the same through a band)"
+    echo "ok   $name ($(wc -l < "$golden" | tr -d ' ') pages, the same through a band; PDF ${pdf#ok   })"
   fi
 }
 
