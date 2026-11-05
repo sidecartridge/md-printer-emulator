@@ -84,6 +84,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-cardfull` | a card that fills up mid-job (`cardfull`: a 1 MB FAT volume over the card's folder, macOS): the ST prints to the end, the job stays a `.TMP` with what fit |
 | `hook-romfree` | once the hook is installed, the CPU runs no code in the cartridge (it is resident in RAM) |
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
+| `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`) |
 | `impossible` | must FAIL: the harness can fail |
 
 `tools/dev/hook_fidelity.sh TEST SETUP` runs a printing test twice on the firmware after
@@ -92,6 +93,9 @@ gets the reference; switched on, the RP's jobs on the card, in order, must hold 
 A job is a file only once it has ended, so with the hook on a test's `printer` step becomes
 `cardfile`, which waits until the hook has taken nothing for the same quiet time, its buffer is
 empty and the jobs hold every byte it took.
+
+`--fast` runs Hatari as fast as it goes while the firmware keeps the host's time: tests that
+time a reset or a boot in frames (`hook-jobs`, `hook-reset`) fail with it; run them without.
 
 `text` reads the setup terminal back as text: `template_extra.c` matches each
 cell of the framebuffer against the terminal's own font when the harness asks

@@ -22,6 +22,7 @@
 #include "ff.h"
 #include "memfunc.h"
 #include "pico/stdlib.h"
+#include "pages.h"
 #include "printer.h"
 #include "reset.h"
 #include "romemul.h"
@@ -558,6 +559,7 @@ void emul_start() {
     // every pass: the ST spins on its answer, so the loop never waits.
     chandler_loop();
     printer_loop();
+    pages_loop();
     if (chandler_consumeStBoot()) {
       // A new ST session: nothing typed before the reset carries over, and
       // the ST gets a freshly drawn menu; the printer's job has ended and

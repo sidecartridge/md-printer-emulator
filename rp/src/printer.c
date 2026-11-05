@@ -15,6 +15,7 @@
 #include "debug.h"
 #include "ff.h"
 #include "md5/md5.h"
+#include "pages.h"
 #include "pico/stdlib.h"
 
 typedef enum {
@@ -219,6 +220,7 @@ static void closeJob(void) {
     if (res == FR_OK) {
       counters.jobs++;
       digestLog(jobNumber);
+      pages_jobClosed(final, jobNumber);
     } else {
       DPRINTF("printer: job %08lu not closed (%d)\n",
               (unsigned long)jobNumber, res);

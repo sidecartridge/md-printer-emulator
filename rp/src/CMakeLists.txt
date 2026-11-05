@@ -128,6 +128,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         emul.c
         gconfig.c
         hw_config.c
+        pages.c
         printer.c
         reset.c
         romemul.c
@@ -135,6 +136,9 @@ target_sources(${PROJECT_NAME} PRIVATE
         select.c
         term.c
         tprotocol.c
+        fx80/font.c
+        fx80/fx80.c
+        fx80/raster.c
         md5/md5.c
         settings/settings.c)
 
