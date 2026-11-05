@@ -5,10 +5,14 @@ specimen.
   font.py check [FONT]              the glyphs keep the printer's rules
   font.py specimen OUT.png [TEXT]   TEXT in draft, emphasized, double-strike
                                     and both, at 1,200 dpi, a dot 1/72 inch
+  font.py chart OUT.png             every glyph from 0x20 to 0xff, sixteen to
+                                    a line, in draft
 
 The rules: nine rows of eleven positions, '#' or '.'; no pin fired at two
-neighbouring positions; the last two positions blank; the top or the bottom
-row blank (a glyph uses eight pins). Emphasized prints every dot again 1/240
+neighbouring positions; the last two positions blank, unless the row fires
+every main column to join the next character (the underline: a character is
+twelve positions wide, so the next one starts two positions on); the top or
+the bottom row blank (a glyph uses eight pins). Emphasized prints every dot again 1/240
 inch to the right, double-strike every dot again 1/216 inch lower.
 """
 import struct
@@ -20,6 +24,7 @@ FONT = Path(__file__).resolve().parents[2] / "rp/src/fx80/font.txt"
 ROWS, COLS = 9, 11
 DPI = 1200
 DOT = DPI / 72          # pin diameter: about the 1/72 inch between pins
+JOIN = "#." * 5 + "#"   # a row that joins the next character's: every main column
 SAMPLE = "Hamburgefonstiv 0123456789"
 
 
@@ -39,7 +44,7 @@ def load(path):
                 errors.append(f"{where} row {n}: {row!r} is not {COLS} of '#' and '.'")
             elif "##" in row:
                 errors.append(f"{where} row {n}: a pin fired at two neighbouring positions")
-            elif "#" in row[COLS - 2:]:
+            elif "#" in row[COLS - 2:] and row != JOIN:
                 errors.append(f"{where} row {n}: the last two positions are not blank")
         if "#" in rows[0] and "#" in rows[-1]:
             errors.append(f"{where}: uses all nine pins (top and bottom rows)")
@@ -74,12 +79,12 @@ def write_png(path, width, height, pixels):
                            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
-def specimen(glyphs, out, text):
-    modes = [("draft", 0, 0), ("emphasized", 1 / 240, 0), ("double-strike", 0, 1 / 216),
-             ("both", 1 / 240, 1 / 216)]
-    margin, line = 0.25, 0.25
-    width = round((2 * margin + len(text) / 10) * DPI)
-    height = round((2 * margin + len(modes) * line) * DPI)
+def draw(glyphs, out, lines, line=0.25, label=None):
+    """lines: [(codes, dx, dy)], each in its own line, every dot printed again
+    dx inch to the right and dy inch lower (emphasized, double-strike)."""
+    margin = 0.25
+    width = round((2 * margin + max(len(c) for c, _, _ in lines) / 10) * DPI)
+    height = round((2 * margin + len(lines) * line) * DPI)
     pixels = bytearray(b"\xff") * (width * height)
     r = DOT / 2
 
@@ -89,13 +94,10 @@ def specimen(glyphs, out, text):
                 if (px - x) ** 2 + (py - y) ** 2 <= r * r and 0 <= px < width and 0 <= py < height:
                     pixels[py * width + px] = 0
 
-    for m, (_, dx, dy) in enumerate(modes):
-        top = margin + m * line
-        for i, ch in enumerate(text):
-            rows = glyphs.get(ord(ch))
-            if rows is None:
-                continue
-            for row, bits in enumerate(rows):
+    for n, (codes, dx, dy) in enumerate(lines):
+        top = margin + n * line
+        for i, code in enumerate(codes):
+            for row, bits in enumerate(glyphs.get(code, ())):
                 for col, bit in enumerate(bits):
                     if bit != "#":
                         continue
@@ -104,14 +106,33 @@ def specimen(glyphs, out, text):
                     for ox, oy in {(0, 0), (dx, 0), (0, dy), (dx, dy)}:
                         dot(x + ox * DPI, y + oy * DPI)
     write_png(out, width, height, pixels)
-    missing = sorted({c for c in text if ord(c) not in glyphs and c != " "})
-    print(f"{out}: {width} x {height}, {', '.join(n for n, _, _ in modes)}"
-          + (f"; no glyph for {''.join(missing)!r}" if missing else ""))
+    print(f"{out}: {width} x {height}" + (f", {label}" if label else ""))
+
+
+def specimen(glyphs, out, text):
+    modes = [("draft", 0, 0), ("emphasized", 1 / 240, 0), ("double-strike", 0, 1 / 216),
+             ("both", 1 / 240, 1 / 216)]
+    codes = [ord(c) for c in text]
+    draw(glyphs, out, [(codes, dx, dy) for _, dx, dy in modes],
+         label=", ".join(n for n, _, _ in modes))
+    missing = sorted({c for c in text if ord(c) not in glyphs})
+    if missing:
+        print(f"no glyph for {''.join(missing)!r}")
+
+
+def chart(glyphs, out):
+    lines = []
+    for row in range(0x20, 0x100, 16):
+        codes = []
+        for c in range(row, row + 16):
+            codes += [c, 0x20]
+        lines.append((codes, 0, 0))
+    draw(glyphs, out, lines, line=1 / 6, label="0x20-0xff, sixteen to a line")
 
 
 def main():
     args = sys.argv[1:]
-    if not args or args[0] not in ("check", "specimen"):
+    if not args or args[0] not in ("check", "specimen", "chart"):
         sys.exit(__doc__)
     if args[0] == "check":
         path = Path(args[1]) if len(args) > 1 else FONT
@@ -125,7 +146,10 @@ def main():
     glyphs, errors = load(FONT)
     if errors:
         sys.exit("\n".join(errors))
-    specimen(glyphs, args[1], args[2] if len(args) > 2 else SAMPLE)
+    if args[0] == "chart":
+        chart(glyphs, args[1])
+    else:
+        specimen(glyphs, args[1], args[2] if len(args) > 2 else SAMPLE)
 
 
 if __name__ == "__main__":
