@@ -276,7 +276,7 @@ static void line_feed(Fx80 *p) {
   p->x = p->leftMargin;
   p->expandedLine = false;
   feed(p, p->lineSpacing);
-  if (p->skipPerforation && p->y > p->formLength - p->skipPerforation) {
+  if (p->skipPerforation && p->y >= p->formLength - p->skipPerforation) {
     page_end(p);
     p->y = 0;
   }
@@ -558,7 +558,7 @@ static void esc_command(Fx80 *p) {
       cancel_line(p);
       int32_t left = n * char_width(p);
       if (left < p->rightMargin) p->leftMargin = left;
-      if (p->x < p->leftMargin) p->x = p->leftMargin;
+      p->x = p->leftMargin;
       break;
     }
     case 'R':

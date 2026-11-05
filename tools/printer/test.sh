@@ -2,7 +2,8 @@
 #
 # test.sh: the FX-80 renderer's host test. Builds render (the firmware's own C
 # in rp/src/fx80), writes our own test streams (tools/dev/st/make_escp_pages.py
-# and make_set128.py), renders each and compares every page's MD5 with
+# and make_set128.py, the ST's; streams.py, the renderer's), renders each and
+# compares every page's MD5 with
 # golden/<stream>.pages. The pages are left as PNGs in
 # tools/dev/builds/printer/<stream>/ to look at. Also checks that font.c is
 # font.txt's. Ends in PASS or FAIL.
@@ -31,7 +32,8 @@ fi
 
 python3 "$ROOT/tools/dev/st/make_escp_pages.py" "$BUILD/streams" > /dev/null
 python3 "$ROOT/tools/dev/st/make_set128.py" "$BUILD/streams" > /dev/null
-for stream in TEXT.PRN GRAPH.PRN SET128.TXT; do
+python3 "$HERE/streams.py" "$BUILD/streams" > /dev/null
+for stream in TEXT.PRN GRAPH.PRN SET128.TXT MOVES.PRN NATIONAL.PRN MODES.PRN; do
   out="$BUILD/$stream"
   mkdir -p "$out"
   find "$out" -name 'page-*.png' -delete
