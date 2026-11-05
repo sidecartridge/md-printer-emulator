@@ -4,7 +4,8 @@
 # in rp/src/fx80), writes our own test streams (tools/dev/st/make_escp_pages.py
 # and make_set128.py, the ST's; streams.py, the renderer's), renders each and
 # compares every page's MD5 with
-# golden/<stream>.pages. The pages are left as PNGs in
+# golden/<stream>.pages, then again through the firmware's band of rows,
+# which must draw the same pages. The pages are left as PNGs in
 # tools/dev/builds/printer/<stream>/ to look at. Also checks that font.c is
 # font.txt's. Ends in PASS or FAIL.
 #
@@ -19,6 +20,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 BUILD="$ROOT/tools/dev/builds/printer"
 UPDATE=0
 [ "${1:-}" = "--update" ] && UPDATE=1
+BAND=128  # the firmware's band
 
 make -s -C "$HERE"
 mkdir -p "$BUILD/streams"
@@ -35,7 +37,7 @@ python3 "$ROOT/tools/dev/st/make_set128.py" "$BUILD/streams" > /dev/null
 python3 "$HERE/streams.py" "$BUILD/streams" > /dev/null
 for stream in TEXT.PRN GRAPH.PRN SET128.TXT MOVES.PRN NATIONAL.PRN MODES.PRN; do
   out="$BUILD/$stream"
-  mkdir -p "$out"
+  mkdir -p "$out/band"
   find "$out" -name 'page-*.png' -delete
   "$BUILD/render" "$BUILD/streams/$stream" "$out" > "$out/pages"
   golden="$HERE/golden/$stream.pages"
@@ -46,11 +48,14 @@ for stream in TEXT.PRN GRAPH.PRN SET128.TXT MOVES.PRN NATIONAL.PRN MODES.PRN; do
   elif [ ! -f "$golden" ]; then
     echo "FAIL $stream: no golden"
     fail=1
-  elif diff -u "$golden" "$out/pages" > "$out/diff"; then
-    echo "ok   $stream ($(wc -l < "$golden" | tr -d ' ') pages)"
-  else
+  elif ! diff -u "$golden" "$out/pages" > "$out/diff"; then
     echo "FAIL $stream: pages differ from the golden ($out/diff; PNGs in $out)"
     fail=1
+  elif ! "$BUILD/render" --band "$BAND" "$BUILD/streams/$stream" "$out/band" | diff -q - "$out/pages" > /dev/null; then
+    echo "FAIL $stream: a band of $BAND rows draws other pages than the whole page"
+    fail=1
+  else
+    echo "ok   $stream ($(wc -l < "$golden" | tr -d ' ') pages, the same through a band)"
   fi
 done
 

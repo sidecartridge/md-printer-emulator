@@ -3,8 +3,10 @@
  * page written as a PNG, with the MD5 of its pixels, the firmware's own C
  * built on the computer.
  *
- * Usage:  render [--letter] FILE OUTDIR
+ * Usage:  render [--letter] [--band ROWS] FILE OUTDIR
  *         OUTDIR/page-001.png, ...; prints "page N WxH MD5" per page.
+ *         --band draws through a band of ROWS rows, as the firmware does;
+ *         the pages must come out the same as with the whole page.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +19,8 @@
 
 typedef struct {
   Fx80Raster raster;
+  uint8_t *page;  // the page's rows as they are handed on, for the PNG
+  MD5Context md5;
   const char *dir;
   int pages;
   int failed;
@@ -37,7 +41,8 @@ static void chunk(FILE *f, const char *type, const uint8_t *data, uint32_t len) 
 }
 
 // A 1-bit greyscale PNG: 0 is black, so the ink bits are inverted.
-static int write_png(const char *path, const Fx80Raster *r) {
+static int write_png(const char *path, const Fx80Raster *r,
+                     const uint8_t *page) {
   size_t rawLen = (size_t)(r->stride + 1) * r->height;
   uint8_t *raw = malloc(rawLen);
   uLongf zLen = compressBound(rawLen);
@@ -46,7 +51,7 @@ static int write_png(const char *path, const Fx80Raster *r) {
   for (int32_t j = 0; j < r->height; j++) {
     uint8_t *out = raw + (size_t)j * (r->stride + 1);
     out[0] = 0;
-    for (int32_t i = 0; i < r->stride; i++) out[1 + i] = ~r->bits[j * r->stride + i];
+    for (int32_t i = 0; i < r->stride; i++) out[1 + i] = ~page[j * r->stride + i];
   }
   compress2(z, &zLen, raw, rawLen, 9);
   FILE *f = fopen(path, "wb");
@@ -74,54 +79,74 @@ static void on_dot(void *ctx, int32_t x, int32_t y) {
   fx80_raster_dot(&((Render *)ctx)->raster, x, y);
 }
 
+static void on_row(void *ctx, int32_t row, const uint8_t *bits) {
+  Render *re = ctx;
+  if (row == 0) md5Init(&re->md5);
+  md5Update(&re->md5, (uint8_t *)bits, re->raster.stride);
+  memcpy(re->page + (size_t)row * re->raster.stride, bits, re->raster.stride);
+}
+
 static void on_page(void *ctx) {
   Render *re = ctx;
   Fx80Raster *r = &re->raster;
+  fx80_raster_finish(r, r->height);
+  md5Finalize(&re->md5);
   re->pages++;
-  MD5Context md5;
-  md5Init(&md5);
-  md5Update(&md5, r->bits, (size_t)r->stride * r->height);
-  md5Finalize(&md5);
   char path[1024];
   snprintf(path, sizeof(path), "%s/page-%03d.png", re->dir, re->pages);
-  if (write_png(path, r) != 0) {
+  if (write_png(path, r, re->page) != 0) {
     fprintf(stderr, "render: cannot write %s\n", path);
     re->failed = 1;
   }
   printf("page %d %dx%d ", re->pages, r->width, r->height);
-  for (int i = 0; i < 16; i++) printf("%02x", md5.digest[i]);
+  for (int i = 0; i < 16; i++) printf("%02x", re->md5.digest[i]);
   printf("\n");
-  memset(r->bits, 0, (size_t)r->stride * r->height);
 }
 
 int main(int argc, char **argv) {
-  int letter = argc > 1 && strcmp(argv[1], "--letter") == 0;
-  if (argc != 3 + letter) {
-    fprintf(stderr, "usage: render [--letter] FILE OUTDIR\n");
+  int letter = 0;
+  int32_t band = 0;
+  int a = 1;
+  for (; a < argc && argv[a][0] == '-' && argv[a][1] == '-'; a++) {
+    if (strcmp(argv[a], "--letter") == 0) {
+      letter = 1;
+    } else if (strcmp(argv[a], "--band") == 0 && a + 1 < argc) {
+      band = atoi(argv[++a]);
+    } else {
+      break;
+    }
+  }
+  if (argc - a != 2) {
+    fprintf(stderr, "usage: render [--letter] [--band ROWS] FILE OUTDIR\n");
     return 2;
   }
-  const char *file = argv[1 + letter];
+  const char *file = argv[a];
   // A4, 210 x 297 mm; Letter, 8.5 x 11 inches.
   int32_t width = letter ? 85 * FX80_X_PER_INCH / 10 : 210 * FX80_X_PER_INCH * 10 / 254;
   int32_t length = letter ? 11 * FX80_Y_PER_INCH : 297 * FX80_Y_PER_INCH * 10 / 254;
   static Render re;
   static Fx80 printer;
-  re.dir = argv[2 + letter];
-  re.raster.width = fx80_raster_width(width);
-  re.raster.height = fx80_raster_height(length);
-  re.raster.stride = (re.raster.width + 7) / 8;
-  re.raster.rows = re.raster.height;
-  re.raster.bits = calloc((size_t)re.raster.stride, re.raster.height);
+  re.dir = argv[a + 1];
+  int32_t w = fx80_raster_width(width);
+  int32_t h = fx80_raster_height(length);
+  int32_t rows = (band > 0 && band < h) ? band : h;
+  int32_t stride = (w + 7) / 8;
+  uint8_t *bits = malloc((size_t)stride * rows);
+  re.page = malloc((size_t)stride * h);
   FILE *in = fopen(file, "rb");
-  if (!in || !re.raster.bits) {
+  if (!in || !bits || !re.page) {
     fprintf(stderr, "render: cannot read %s\n", file);
     return 1;
   }
+  fx80_raster_init(&re.raster, bits, w, h, rows, on_row, &re);
   Fx80Sink sink = {on_dot, on_page, &re};
   fx80_init(&printer, &sink, width, length);
   int c;
   while ((c = fgetc(in)) != EOF) fx80_byte(&printer, (uint8_t)c);
   fclose(in);
   fx80_end(&printer);
+  if (re.raster.lost) {
+    printf("lost %lu dots above the band\n", (unsigned long)re.raster.lost);
+  }
   return re.failed;
 }
