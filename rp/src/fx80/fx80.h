@@ -65,7 +65,6 @@ typedef struct {
 typedef struct {
   Fx80Sink sink;
   int32_t originX;  // where the line's column 0 is on the paper
-  int32_t originY;  // where the form starts on the paper
   int32_t defaultFormLength;  // y units
 
   // The parser.
@@ -134,10 +133,10 @@ typedef struct {
 /**
  * @brief Powers the printer on: its modes, the top of the form.
  * @param paperWidth, paperLength the paper, in x and y units. The printer's
- * 8-inch line is centred on it, and the form starts 1/6 inch below its top
- * edge, as a sheet loaded with its edge just above the head; the form length
- * starts as the whole lines of 1/6 inch that fit below that (A4: 69 lines,
- * Letter: 65).
+ * 8-inch line is centred on it, and the form starts at its top edge (1/72
+ * inch below, so that the top pin's dot is whole); the form length starts as
+ * the whole lines of 1/6 inch that fit on it (A4: 70 lines, Letter: 66, the
+ * page a program sets out at 6 lines an inch).
  */
 void fx80_init(Fx80 *p, const Fx80Sink *sink, int32_t paperWidth,
                int32_t paperLength);

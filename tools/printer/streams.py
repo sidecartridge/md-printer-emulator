@@ -14,7 +14,7 @@ make_escp_pages.py) leave out.
                 bit (ESC =, ESC >, ESC #), ESC 7, expanded with SO and DC4
   LONG.PRN      continuous text: 150 numbered lines and no form feed until
                 the end, so the pages break where the form length the paper
-                gives at power-on ends (A4: after 69 lines, Letter: 65)
+                gives at power-on ends (A4: after 70 lines, Letter: 66)
 
 Usage:  streams.py OUTDIR
 """

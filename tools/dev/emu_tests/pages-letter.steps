@@ -24,8 +24,8 @@ wait 100
 key 0x01
 wait 900
 key 0x39
-log "pages: job 00000001 page 1 2040x2376 MD5 9e494fbc20857102c03fd4e7ac4f2040" 3000
-log "pages: job 00000001 page 2 2040x2376 MD5 5cde665dbad854204f40ccbc5408a688" 600
-log "pages: job 00000001 page 3 2040x2376 MD5 2d2b54e5aa6d4360d5db447a8c3359f9" 600
-log "pages: job 00000001 rendered, 3 pages, PDF 31757 bytes" 600
+log "pages: job 00000001 page 1 2040x2376 MD5 afeab6ba98461a13ff9c9bcb6da47b52" 3000
+log "pages: job 00000001 page 2 2040x2376 MD5 e26ac2c2a1ea7753e3bfb427c3309454" 600
+log "pages: job 00000001 page 3 2040x2376 MD5 d998a0c9b47c1c2348d3cbcf9ed0ac91" 600
+log "pages: job 00000001 rendered, 3 pages, PDF 31764 bytes" 600
 cardsame PRINTER/00000001.pdf tools/dev/builds/disks/escp-expected-letter.pdf

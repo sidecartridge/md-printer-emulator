@@ -34,6 +34,6 @@ wait 100
 key 0x01
 wait 900
 key 0x39
-log "pages: job 00000003 rendered, 3 pages, PDF 32375 bytes" 3000
+log "pages: job 00000003 rendered, 3 pages, PDF 32366 bytes" 3000
 cardsame PRINTER/00000003.pdf tools/dev/builds/disks/escp-expected.pdf
 cardnone PRINTER/*.PRN

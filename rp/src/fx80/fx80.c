@@ -65,6 +65,7 @@ enum {
 #define SUBSCRIPT_DROP 21        // a subscript's top, below the line's
 #define LINE_WIDTH_MAX (8 * FX80_X_PER_INCH)  // 80 pica columns
 #define SIXTH_INCH (FX80_Y_PER_INCH / 6)
+#define FORM_TOP FX80_PIN_PITCH  // below the paper's edge, its top dot whole
 
 // The 12 codes an international set (ESC R) replaces, and what each set
 // prints there: an Atari code, or one of the two extra glyphs.
@@ -129,7 +130,7 @@ static uint16_t pins_from_byte(uint8_t b) {
 
 static void strike(Fx80 *p, int32_t x, int32_t y) {
   if (y < 0 || x < 0) return;
-  p->sink.dot(p->sink.ctx, p->originX + x, p->originY + y);
+  p->sink.dot(p->sink.ctx, p->originX + x, FORM_TOP + y);
   p->pageDirty = true;
 }
 
@@ -661,9 +662,7 @@ void fx80_init(Fx80 *p, const Fx80Sink *sink, int32_t paperWidth,
   p->sink = *sink;
   p->originX =
       paperWidth > LINE_WIDTH_MAX ? (paperWidth - LINE_WIDTH_MAX) / 2 : 0;
-  p->originY = SIXTH_INCH;
-  p->defaultFormLength =
-      ((paperLength - p->originY) / SIXTH_INCH) * SIXTH_INCH;
+  p->defaultFormLength = (paperLength / SIXTH_INCH) * SIXTH_INCH;
   reset_modes(p);
   p->state = ST_TEXT;
 }
@@ -704,7 +703,7 @@ void fx80_byte(Fx80 *p, uint8_t b) {
 
 void fx80_end(Fx80 *p) {
   print_line(p);
-  if (p->pageDirty || p->y > 0) page_end(p);
+  if (p->pageDirty) page_end(p);
   p->y = 0;
   p->x = p->leftMargin;
 }
