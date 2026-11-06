@@ -19,6 +19,12 @@ C:\ESCP          PRFILES.PRG: a key prints TEXT.PRN, then GRAPH.PRN (our
                  MD5 5571886388a18dcfa368d775ba0d3404
                  (each file prints through BIOS, byte by byte)
 
+C:\PCL           PRFILES.PRG again, with our PCL test streams as TEXT.PRN
+                 and GRAPH.PRN: one job the RP prints as the HP LaserJet II
+                 (it starts in PCL). Low resolution. Expected: 19163 bytes,
+                 MD5 2ae5138a9ddf6ca8b9e647f55abf9cb1; 8 pages at 300 dpi, PDF 68103 bytes
+                 on A4, the first page drawn band by band
+
 C:\PRPATHS       PRPATHS.PRG: a key before each of its 5 print paths, a key
                  at the end. Path 5 is a screen dump of what is on screen,
                  so the job differs from the emulated one there.
