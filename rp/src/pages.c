@@ -455,10 +455,22 @@ static void render(void) {
   } while (absolute_time_diff_us(get_absolute_time(), until) > 0);
 }
 
+#if defined(_DEBUG) && (_DEBUG != 0)
+// Debug builds: where the longest pass was, for swd.py to read: the state
+// before it and after it, and the LaserJet's phase before it (0xFF for none).
+static volatile uint8_t longestPass[3] __attribute__((used));
+#endif
+
 // One step a pass: each of the card's slow steps (opening, naming, deleting
 // a file) has a pass of its own.
 void pages_loop(void) {
   if (state == STATE_IDLE && nextJob > lastClosed) return;
+#if defined(_DEBUG) && (_DEBUG != 0)
+  uint8_t before = (uint8_t)state;
+  uint8_t phase = state == STATE_RENDERING && laserjet
+                      ? printer.laserjet.phase
+                      : 0xFF;
+#endif
   absolute_time_t passStart = get_absolute_time();
   switch (state) {
     case STATE_IDLE:
@@ -476,7 +488,14 @@ void pages_loop(void) {
   }
   uint32_t us = (uint32_t)absolute_time_diff_us(passStart, get_absolute_time());
   if (us > jobLongestUs) jobLongestUs = us;
-  if (us > counters.longestUs) counters.longestUs = us;
+  if (us > counters.longestUs) {
+    counters.longestUs = us;
+#if defined(_DEBUG) && (_DEBUG != 0)
+    longestPass[0] = before;
+    longestPass[1] = (uint8_t)state;
+    longestPass[2] = phase;
+#endif
+  }
 }
 
 const PagesCounters *pages_getCounters(void) { return &counters; }
