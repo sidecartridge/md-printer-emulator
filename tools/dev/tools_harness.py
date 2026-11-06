@@ -84,7 +84,7 @@ def keys(s, pause=0.4):
 
 
 def to_menu():
-    keys("\nm\n")
+    keys("\x1b")  # ESC: the folder picker, if open, is closed
     time.sleep(1.0)
     return "Select an option" in text()
 
@@ -160,19 +160,18 @@ def device_checks(do_reset):
 
     print("mailbox: key, inject, app")
     cur = LogCursor()
-    keys("h\n")
+    keys("o")
     time.sleep(0.8)
-    check("key: 'h' + Enter shows the help", "Available commands" in text())
-    check("key: the firmware logged both keystrokes",
-          cur.wait(r"Keystroke: h\.") and cur.wait(r"Keystroke: 10\."))
-    check("key: back to the menu", to_menu())
+    check("key: 'o' opens the folder picker", "Folder: " in text())
+    check("key: the firmware logged the keystroke", cur.wait(r"Keystroke: o\."))
+    check("key: ESC closes it", to_menu())
     cur = LogCursor()
-    rc, out = swdpy("inject", "0x0001", "0x0068", "0")
-    rc2, _ = swdpy("inject", "0x0001", "0x000A", "0")
+    rc, out = swdpy("inject", "0x0001", "0x006F", "0")
     time.sleep(0.8)
     check("inject: raw keystroke frames reach the terminal",
-          rc == 0 and rc2 == 0 and cur.wait(r"Injected command 0001") and
-          "Available commands" in text())
+          rc == 0 and cur.wait(r"Injected command 0001") and
+          "Folder: " in text())
+    to_menu()
     to_menu()
     before = heap_in_use_kb()
     rc, out = swdpy("app", "heap_hold", "16")

@@ -6,9 +6,8 @@
 # the hook ignores Alt-Help while a dump runs: the job holds one whole dump,
 # the same as a single quick Alt-Help's.
 @disk-a tools/dev/builds/disks/autotest.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

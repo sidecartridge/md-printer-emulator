@@ -245,11 +245,10 @@ def main():
         svars, set_lines, boot_trace = reboot_st(elf, sent)
 
 
-    print("run the test ([F]irmware)")
+    print("run the test (the menu's [E])")
     cur = LogCursor()
     t0 = time.time()
-    run(sys.executable, os.path.join(DEV, "swd.py"), "key", "f")
-    run(sys.executable, os.path.join(DEV, "swd.py"), "key", "\n")
+    run(sys.executable, os.path.join(DEV, "swd.py"), "key", "e")
     time.sleep(1.0)
     write_sentinel(sent, CMD_NOP)      # so the ST's closing reboot lands in the menu
     done = cur.wait(r"Command ID: 32639\.", 240)

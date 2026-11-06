@@ -9,8 +9,11 @@
 #ifndef TERM_H
 #define TERM_H
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+
 #include "pico.h"
 #include "tprotocol.h"
 
@@ -71,6 +74,23 @@
     term_printString(buffer);                             \
   } while (0)
 
+// How the terminal takes keys (term_setCommandLevel):
+enum {
+  TERM_COMMAND_LEVEL_SINGLE_KEY = 0,     // a key runs its one-letter command
+  TERM_COMMAND_LEVEL_COMMAND_INPUT = 1,  // a line, run as a command at Return
+  TERM_COMMAND_LEVEL_SINGLE_KEY_REENTRY = 2,  // each key to the command
+                                              // whose key asked for them
+};
+
+// The ST's cursor keys, by scan code, and the codes a command gets for them.
+#define TERM_KEYBOARD_SCAN_CODE_UP 72
+#define TERM_KEYBOARD_SCAN_CODE_DOWN 80
+#define TERM_KEYBOARD_SCAN_CODE_LEFT 75
+#define TERM_KEYBOARD_SCAN_CODE_RIGHT 77
+#define TERM_KEYBOARD_KEY_UP 16
+#define TERM_KEYBOARD_KEY_DOWN 14
+#define TERM_KEYBOARD_KEY_LEFT 2
+#define TERM_KEYBOARD_KEY_RIGHT 6
 // Command lookup structure, now with argument support
 typedef struct {
   const char *command;
@@ -126,28 +146,15 @@ void term_setCommands(const Command *cmds, size_t count);
 void term_clearInputBuffer(void);
 
 /**
- * @brief Retrieve the current terminal input buffer.
- *
- * This function returns a pointer to the buffer holding the input from the
- * terminal. The buffer is used for processing terminal input.
- *
- * @return char* A pointer to the terminal's input buffer.
+ * @brief How the next keys are taken (TERM_COMMAND_LEVEL_*).
  */
-char *term_getInputBuffer(void);
+void term_setCommandLevel(uint8_t level);
+uint8_t term_getCommandLevel(void);
 
-// Generic commands to be used in the terminal
-// Manage application setttings
-void term_cmdSettings(const char *arg);
-void term_cmdPrint(const char *arg);
-void term_cmdSave(const char *arg);
-void term_cmdErase(const char *arg);
-void term_cmdGet(const char *arg);
-void term_cmdPutInt(const char *arg);
-void term_cmdPutBool(const char *arg);
-void term_cmdPutString(const char *arg);
-void term_printDeviceInfo(void);
-void term_markMenuPromptCursor(void);
-void term_refreshMenuLiveInfo(void);
+/**
+ * @brief Whether a key was pressed since the last call.
+ */
+bool term_consumeAnyKeyPressed(void);
 
 void __not_in_flash_func(term_loop)();
 

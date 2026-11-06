@@ -898,15 +898,15 @@ def load_steps(args):
     steps += args.step
     if args.via_firmware:
         args.hatari = "fork"  # the firmware is only in the fork
-        # The firmware's setup menu first: [F]irmware installs the printer
-        # hook, switched off first if asked (shared variable 2).
-        first = ['text "Atari +: (ST|STE|Mega STE), TOS" 1500']
+        # The firmware's setup menu first: [E] installs the printer hook,
+        # switched off first if asked (shared variable 2), and [A] puts the
+        # paper to Letter if asked.
+        first = ['text "Machine +: (ST|STE|Mega STE), TOS" 1500']
         if args.hook == "off":
             first.append("svar 2 0")
         if args.paper == "letter":
-            first += ["type put_str PAPER LETTER", "key 0x1c", "key m", "key 0x1c",
-                      'text "Atari +: (ST|STE|Mega STE), TOS" 300']
-        first += ["key f", "key 0x1c"]
+            first += ["key a", 'text "P\\[a\\]per +: Letter" 300']
+        first += ["key e"]
         steps = first + steps
         if args.hook == "on":
             # What reaches the printer port with the hook off reaches the card.

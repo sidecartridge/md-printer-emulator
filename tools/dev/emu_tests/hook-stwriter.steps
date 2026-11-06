@@ -4,9 +4,8 @@
 @printer
 @disk-a tools/dev/builds/launchers/stwriter.st
 @disk-b $PROGRAM_DISKS/st_writer_elite_4_0/files/st_writer_elite_atari_(usa).st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 1300

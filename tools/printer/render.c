@@ -3,12 +3,13 @@
  * page written as a PNG, with the MD5 of its pixels, the firmware's own C
  * built on the computer.
  *
- * Usage:  render [--letter] [--laserjet] [--band ROWS] [--pdf OUT.pdf] FILE
- *         OUTDIR
+ * Usage:  render [--letter] [--laserjet|--fx80] [--band ROWS] [--pdf OUT.pdf]
+ *         FILE OUTDIR
  *         OUTDIR/page-001.png, ...; prints "page N WxH MD5" per page.
- *         The HP LaserJet II (rp/src/pcl) prints at 300 dpi a stream that
- *         starts in PCL (pcl_recognise), as the firmware does, or any with
- *         --laserjet; the FX-80 the rest.
+ *         The printer as the firmware's PRINTER setting picks it: with
+ *         neither option, Auto, the HP LaserJet II (rp/src/pcl, 300 dpi) for
+ *         a stream that starts in PCL (pcl_recognise) and the FX-80 for the
+ *         rest; --laserjet or --fx80, that printer whatever the stream.
  *         --band draws through a band of ROWS rows, as the firmware does;
  *         the pages must come out the same as with the whole page.
  *         --pdf also writes the pages as a PDF (rp/src/pdf), as the firmware
@@ -143,6 +144,7 @@ static bool seek_file(void *ctx, uint32_t offset) {
 int main(int argc, char **argv) {
   int letter = 0;
   int laserjet = 0;
+  int fx80 = 0;
   int32_t band = 0;
   const char *pdfPath = NULL;
   int a = 1;
@@ -151,6 +153,8 @@ int main(int argc, char **argv) {
       letter = 1;
     } else if (strcmp(argv[a], "--laserjet") == 0) {
       laserjet = 1;
+    } else if (strcmp(argv[a], "--fx80") == 0) {
+      fx80 = 1;
     } else if (strcmp(argv[a], "--band") == 0 && a + 1 < argc) {
       band = atoi(argv[++a]);
     } else if (strcmp(argv[a], "--pdf") == 0 && a + 1 < argc) {
@@ -161,7 +165,7 @@ int main(int argc, char **argv) {
   }
   if (argc - a != 2) {
     fprintf(stderr,
-            "usage: render [--letter] [--laserjet] [--band ROWS] "
+            "usage: render [--letter] [--laserjet|--fx80] [--band ROWS] "
             "[--pdf OUT.pdf] FILE OUTDIR\n");
     return 2;
   }
@@ -178,7 +182,7 @@ int main(int argc, char **argv) {
   }
   uint8_t start[512];  // as much as the firmware looks at
   size_t got = fread(start, 1, sizeof(start), in);
-  if (pcl_recognise(start, (uint32_t)got)) laserjet = 1;
+  if (!fx80 && pcl_recognise(start, (uint32_t)got)) laserjet = 1;
   rewind(in);
   int32_t w = fx80_raster_width(width);
   int32_t h = fx80_raster_height(length);

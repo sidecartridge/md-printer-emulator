@@ -7,9 +7,8 @@
 # one tools/printer/render writes for the same bytes (make_bench_disks.sh's
 # escp-expected.pdf), and the job deleted once it is.
 @disk-a tools/dev/builds/disks/escp.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

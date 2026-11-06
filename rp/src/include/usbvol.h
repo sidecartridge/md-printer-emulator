@@ -49,6 +49,11 @@ void usbvol_init(void);
 void usbvol_loop(void);
 
 /**
+ * @brief The folder setting changed: the volume shows the new folder's PDFs.
+ */
+void usbvol_folderChanged(void);
+
+/**
  * @brief True while a computer has the volume.
  */
 bool usbvol_mounted(void);

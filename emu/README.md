@@ -39,7 +39,7 @@ tools/dev/mdfw.sh run --no-user-config --tos emu/tos/tos162uk.img --machine ste
 `tools/dev/mdfw.sh` is emumd's `mdfw` with this repository's cache.
 `mdfw.ini` (at the root) builds everything in `rp/src` but the hardware layer
 emumd stands in for (the bus, SELECT, the SD card driver), and this folder.
-In the setup menu, `f` then Return launches the user firmware.
+In the setup menu, `e` starts the printer (the user firmware); untouched, its countdown does after 20 seconds.
 
 What building `rp/src` for a 64-bit host needed, in the firmware's own sources
 and without changing the device's build (its flash image is byte-identical):
@@ -70,7 +70,10 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | Test | What it checks |
 | --- | --- |
 | `template-menu` | the setup menu appears; the ST's hello, machine and TOS arrive |
-| `template-firmware` | `[F]irmware` runs the user firmware's demo |
+| `template-firmware` | `[E]` starts the printer: the ST runs the user firmware |
+| `menu-keys` | the setup menu's keys: `P` steps the printer through Auto, the FX-80 and the LaserJet, `A` toggles the paper, `T` steps through the timeouts (round again after 120 s), `O` opens the folder picker (up to the root, the cursor keys, into a folder, SPACE chooses it), `E` starts the printer, and a job lands in the new folder |
+| `menu-countdown` | untouched, the menu's countdown starts the printer by itself |
+| `menu-halt` | a key stops the countdown: the menu stays |
 | `template-reset` | warm resets: the menu again, then the user firmware once per reset |
 | `template-coldreset` | a cold reset power-cycles the Multi-device: the menu again |
 | `floppy-auto` | a floppy's `AUTO` program runs after the cartridge, then the desktop |
@@ -86,13 +89,13 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
 | `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`), the PDF equals `tools/printer/render`'s byte for byte, and the job is deleted |
 | `pages-letter` | the `PAPER` setting put to `LETTER` in the setup menu: the job's pages are 8.5 x 11 inches, the host test's Letter goldens, and the PDF `tools/printer/render --letter`'s byte for byte |
-| `pages-laserjet` | a job that starts in PCL is printed by the HP LaserJet II whatever `PRINTER` says: our PCL streams, one of whose pages moves back up and is drawn band by band; its pages are the host test's, and its PDF `tools/printer/render`'s byte for byte |
-| `pages-laserjet-text` | the `PRINTER` setting put to `LASERJET` in the setup menu: plain text with no escape code is printed by the LaserJet, in its Courier, the pixels and the PDF of `tools/printer/render --laserjet` |
+| `pages-laserjet` | in Auto, `PRINTER`'s default, a job that starts in PCL is printed by the HP LaserJet II: our PCL streams, one of whose pages moves back up and is drawn band by band; its pages are the host test's, and its PDF `tools/printer/render`'s byte for byte |
+| `pages-laserjet-text` | the `PRINTER` setting put to the LaserJet in the setup menu: plain text with no escape code, which Auto gives the FX-80, is printed by the LaserJet, in its Courier, the pixels and the PDF of `tools/printer/render --laserjet` |
 | `pages-recovery` | the RP restarts mid-job: at boot the job is closed and rendered, an unfinished PDF deleted, and the next job takes the next number |
 | `impossible` | must FAIL: the harness can fail |
 
 `tools/dev/hook_fidelity.sh TEST SETUP [--paper letter]` runs a printing test twice on the
-firmware after `[F]irmware` (`--via-firmware`): with the printer switched off (`--hook off`), the
+firmware after the menu's `[E]` (`--via-firmware`): with the printer switched off (`--hook off`), the
 printer port gets the reference; switched on, the RP's jobs, in order, must hold the same bytes,
 and each job's pages and PDF must be what `tools/printer/render` draws for those bytes on that
 paper (`--paper letter` puts the `PAPER` setting first). A job counts only once it has ended, so

@@ -140,11 +140,12 @@ static bool paper_letter(void) {
   return entry != NULL && strcasecmp(entry->value, "LETTER") == 0;
 }
 
-// The PRINTER setting: LASERJET, or the FX-80 for any other value.
-static bool printer_laserjet(void) {
+// The PRINTER setting: FX80 or LASERJET names the printer; AUTO, or any
+// other value, leaves it to the job (start()).
+static const char *printer_setting(void) {
   SettingsConfigEntry *entry =
       settings_find_entry(aconfig_getContext(), ACONFIG_PARAM_PRINTER);
-  return entry != NULL && strcasecmp(entry->value, "LASERJET") == 0;
+  return entry != NULL ? entry->value : "AUTO";
 }
 
 static bool read_job(void *ctx, uint8_t *data, uint32_t size, uint32_t *got) {
@@ -297,12 +298,19 @@ static void start(void) {
     advance();
     return;
   }
-  // The setting's printer, or the LaserJet for a job that starts in PCL.
+  // The printer the setting names; in Auto, the LaserJet for a job that
+  // starts in PCL and the FX-80 for the rest, plain text included.
   bufferLength = 0;
-  laserjet = printer_laserjet() ||
-             (f_read(&file, buffer, sizeof(buffer), &bufferLength) == FR_OK &&
-              pcl_recognise(buffer, bufferLength));
-  f_lseek(&file, 0);
+  const char *setting = printer_setting();
+  if (strcasecmp(setting, "LASERJET") == 0) {
+    laserjet = true;
+  } else if (strcasecmp(setting, "FX80") == 0) {
+    laserjet = false;
+  } else {
+    laserjet = f_read(&file, buffer, sizeof(buffer), &bufferLength) == FR_OK &&
+               pcl_recognise(buffer, bufferLength);
+    f_lseek(&file, 0);
+  }
   bool letter = paper_letter();
   pdf_begin(&pdf, write_card, &pdfFile);
   if (laserjet) {
@@ -384,6 +392,8 @@ static void delete_job(void) {
   f_unlink(path);
   counters.jobs++;
   counters.lost += raster.lost;
+  counters.lastJob = jobNumber;
+  counters.lastPages = jobPages;
   DPRINTF(
       "pages: job %08lu rendered, %lu pages, PDF %lu bytes, %lld us, "
       "longest pass %lu us, %lu dots lost\n",
@@ -499,3 +509,7 @@ void pages_loop(void) {
 }
 
 const PagesCounters *pages_getCounters(void) { return &counters; }
+
+uint32_t pages_rendering(void) { return state == STATE_IDLE ? 0 : jobNumber; }
+
+bool pages_busy(void) { return state != STATE_IDLE || nextJob <= lastClosed; }

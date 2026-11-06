@@ -695,7 +695,7 @@ The cartridge image is split into two `.text` sections by `target/atarist/src/us
 `USERFW equ (ROM4_ADDR + $800)` names the entry. Once the RP writes `CMD_START` to the cartridge sentinel, `main.s`'s `check_commands` macro `beq`s to `rom_function`, which puts back a Mega STE's cache setting and does `jmp USERFW`. The top of the stack is then TOS's return address: an `rts` from the user firmware lets TOS carry on booting, as the demo does.
 
 How to launch the user firmware:
-- From the RP/terminal side: pick `[F]irmware` in the menu (key `f`). The `cmdFirmware` handler in `rp/src/emul.c` writes `DISPLAY_COMMAND_START` (= `4` = `CMD_START`) to the cartridge sentinel via `SEND_COMMAND_TO_DISPLAY`. The m68k's vsync-polled `check_commands` then dispatches to `USERFW`. The command is refused until the RP has had the ST's hello since it started: after an RP-only reboot, reset the ST first.
+- From the RP/terminal side: press `E` in the setup menu, or let its countdown run out. `emul_startPrinter()` in `rp/src/emul.c` writes `DISPLAY_COMMAND_START` (= `4` = `CMD_START`) to the cartridge sentinel via `SEND_COMMAND_TO_DISPLAY`. The m68k's vsync-polled `check_commands` then dispatches to `USERFW`. The command is refused until the RP has had the ST's hello since it started: after an RP-only reboot, reset the ST first.
 - The sentinel is a level, not a queue: it stays at `CMD_START` until the RP writes something else, so resetting the ST runs the user firmware again.
 
 What `userfw.s` has to work with (all included at its top, the senders at its end):

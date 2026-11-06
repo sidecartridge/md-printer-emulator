@@ -3,7 +3,7 @@
 # from tools/dev/make_bench_disks.sh. A Mega STE's memory test is cut short
 # with ESC.
 @disk-a tools/dev/builds/disks/autotest.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
 key e
 key 0x1c
 wait 100

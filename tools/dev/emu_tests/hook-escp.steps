@@ -6,9 +6,8 @@
 # for byte (the size and MD5 the RP logs as it closes the job, whose file is
 # deleted once its PDF is written).
 @disk-a tools/dev/builds/disks/escp.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

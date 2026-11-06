@@ -1,14 +1,13 @@
-# The RP prints a job that starts in PCL as the HP LaserJet II, whatever the
-# PRINTER setting says (FX80, its default): our PCL streams (RASTER.PCL as
+# In Auto, the PRINTER setting's default, the RP prints a job that starts in
+# PCL as the HP LaserJet II: our PCL streams (RASTER.PCL as
 # TEXT.PRN, PAGES.PCL as GRAPH.PRN, sent by PRFILES) become one job of 8
 # pages at 300 dpi. RASTER.PCL moves back up its page, so the RP draws that
 # page band by band, a pass over its bytes for each. The pages must be the
 # pixels the host test draws (tools/printer/render, make_bench_disks.sh's
 # pcl-expected.pages), and the PDF the one it writes, byte for byte.
 @disk-a tools/dev/builds/disks/pcl.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

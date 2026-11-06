@@ -7,9 +7,8 @@
 # reset, still says 1: the next job still takes number 3. No job's bytes are
 # left.
 @disk-a tools/dev/builds/disks/escp.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 cardput PRINTER/00000001.PDT
 cardput PRINTER/00000001.PRN
@@ -27,9 +26,8 @@ cardnone PRINTER/00000001.*
 cardnone PRINTER/*.PDT
 cardnone PRINTER/*.TMP
 cardnone PRINTER/*.PRN
-text "Atari +: (ST|STE|Mega STE), TOS" 500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 500
+key e
 wait 100
 key 0x01
 wait 900

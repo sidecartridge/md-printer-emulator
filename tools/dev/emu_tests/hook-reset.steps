@@ -4,9 +4,8 @@
 # warm reset the vectors reach it once more and its counters start at 0.
 @printer
 @disk-a tools/dev/builds/disks/autotest.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 screen same autotest 1500
