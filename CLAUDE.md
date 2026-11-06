@@ -186,6 +186,21 @@ What a program prints on the ST becomes bytes on the RP:
   page's MD5 and the PDF's size, which `tools/printer/render [--pdf]` gives for the same job on
   the computer; `tools/printer/test.sh` is the host test (golden page MD5s of our own streams,
   each PDF checked with poppler by `pdfcheck.py`).
+- **USB** (`rp/src/usbvol.c`, `rp/src/pdfvol/`): once the card is mounted and the Pico W's
+  micro-USB brings power (VBUS, on the Wi-Fi chip), a computer sees `PDFPRINTER`, a read-only
+  FAT32 volume of the folder's finished PDFs and nothing else. `pdfvol.c` makes each sector up
+  as it is read (boot sector, FATs, a root folder of `nnnnnnnn.pdf` short names marked
+  lowercase) and reads a PDF's sectors from its file on the card; TinyUSB's callbacks run in
+  `tud_task()`, in the main loop. The folder is listed when USB starts and again after each new
+  PDF; the volume then reads as no medium for 5 s and comes back as a medium that changed, with
+  another serial number, so the computer mounts it afresh (macOS about 8 s after the PDF, no
+  dialog, measured). A computer only learns of it by polling TEST UNIT READY, which macOS stops
+  for good once a PREVENT ALLOW MEDIUM REMOVAL succeeds, and TinyUSB answers that one as done
+  unless `tud_msc_prevent_allow_medium_removal_cb` refuses it: keep it refused. TinyUSB's
+  buffer is 512 bytes, since md-drives-emulator's 4 KB does not fit beside the band and the
+  ring (263 KB/s to a Mac). emumd has no USB: `emu/usbvol_none.c` stands in.
+  `tools/pdfvol/test.sh` is the host test (the volume as an image, `fsck_msdos`, mounted
+  read-only, every file and date compared).
 
 ### Shared 64 KB cartridge region
 The Atari ST sees a 64 KB window at `$FA0000`–`$FAFFFF` (mirrored RP-side at `0x20030000`). This is the **single source of truth** for any cross-target data layout — both sides derive every offset symbolically from constants in `rp/src/include/chandler.h` (RP-side) and `target/atarist/src/main.s` (m68k side). **Apps must never hard-code an address inside this region** — always reference the named offset/symbol.

@@ -136,11 +136,14 @@ target_sources(${PROJECT_NAME} PRIVATE
         select.c
         term.c
         tprotocol.c
+        usb_descriptors.c
+        usbvol.c
         fx80/font.c
         fx80/fx80.c
         fx80/raster.c
         pdf/deflate.c
         pdf/pdf.c
+        pdfvol/pdfvol.c
         md5/md5.c
         settings/settings.c)
 
@@ -154,6 +157,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     no-OS-FatFS-SD-SDIO-SPI-RPi-Pico                # FATFS library   
     pico_stdlib              # Core functionality
     pico_multicore          # Multicore support
+    pico_unique_id           # the USB serial number
+    tinyusb_device           # the PDF volume over USB (usbvol.c)
     u8g2                     # for display
 )
 
