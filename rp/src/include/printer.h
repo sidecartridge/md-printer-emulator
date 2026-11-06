@@ -17,8 +17,10 @@
 #define PRINTER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
+#include "settings.h"
 #include "tprotocol.h"
 
 #define PRINTER_SVAR_ENABLED 2         // shared variable index
@@ -42,13 +44,15 @@
 
 // The jobs: each is one file in the folder (the app's FOLDER setting),
 // nnnnnnnn.TMP while it receives and nnnnnnnn.PRN once IDLE_SECONDS have
-// passed without a block, or the ST has booted again. The number comes from
-// NEXT_JOB, stored in flash once the ST has been quiet for IDLE_SECONDS; a
-// number already on the card is skipped.
+// passed without a block, or the ST has booted again; then pages.c renders it
+// into nnnnnnnn.pdf. The number comes from NEXT_JOB, stored in flash once the
+// ST has been quiet for IDLE_SECONDS; a number already on the card, as either
+// file or the PDF, is skipped.
 #define PRINTER_FOLDER "/PRINTER"
 #define PRINTER_JOB_EXTENSION ".PRN"
 #define PRINTER_TEMP_EXTENSION ".TMP"
 #define PRINTER_JOB_LAST 99999999u  // eight digits
+#define PRINTER_PATH_SIZE (SETTINGS_MAX_VALUE_LENGTH + 16)
 #define PRINTER_IDLE_SECONDS_MIN 1
 
 typedef struct {
@@ -67,6 +71,17 @@ typedef struct {
  * @brief Reads the folder and the idle timeout from the app's settings.
  */
 void printer_init(void);
+
+/**
+ * @brief The jobs' folder.
+ */
+const char *printer_folder(void);
+
+/**
+ * @brief A job's path: the folder, its eight digits and the extension.
+ */
+void printer_jobPath(char *path, size_t size, uint32_t number,
+                     const char *extension);
 
 /**
  * @brief The command callback (chandler_addCB): takes a block into the ring

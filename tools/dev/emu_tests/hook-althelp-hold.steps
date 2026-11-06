@@ -17,11 +17,11 @@ desktop 2500
 keydown 0x38
 key 0x62
 keyup 0x38
-cardfile PRINTER/*.PRN 64026 4000
+jobbytes * 64026 4000
 keydown 0x38
 key 0x62 100
 wait 200
 key 0x62
 keyup 0x38
-cardfile PRINTER/*.PRN 128052 4000
-cardsame PRINTER/00000002.PRN card:PRINTER/00000001.PRN
+jobbytes * 128052 4000
+jobsame 2 job:1

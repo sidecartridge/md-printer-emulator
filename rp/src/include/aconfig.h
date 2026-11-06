@@ -17,6 +17,8 @@
 #define ACONFIG_PARAM_MODE "MODE"
 #define ACONFIG_PARAM_NEXT_JOB "NEXT_JOB"          // the next print job's number
 #define ACONFIG_PARAM_IDLE_SECONDS "IDLE_SECONDS"  // a job ends after this quiet
+#define ACONFIG_PARAM_NEXT_PDF "NEXT_PDF"          // the next job to render
+#define ACONFIG_PARAM_PAPER "PAPER"                // A4 or LETTER
 
 #define ACONFIG_SUCCESS 0
 #define ACONFIG_INIT_ERROR -1

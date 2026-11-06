@@ -24,7 +24,8 @@ a test's "@disk-a PATH", "@disk-b PATH" or "@acsi PATH" line gives the run that
 disk, relative to the repository ($PROGRAM_DISKS: the downloaded programs'
 disks, by default /Volumes/MacData/md-printer-emulator-disks), unless the
 command line does; "@hatari
-stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those options):
+stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those
+options):
 
   wait FRAMES           let FRAMES frames pass
   key KEY [FRAMES]      press and release a key, in one event; with FRAMES,
@@ -35,8 +36,8 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
   keydown KEY, keyup KEY
                         hold or release a key (Alt-Help: keydown 0x38,
                         key 0x62, keyup 0x38)
-  type TEXT             type TEXT, one key at a time (lower-case letters,
-                        digits, space; \\n is Return)
+  type TEXT             type TEXT, one key at a time (letters, capitals with
+                        Shift, digits, space; \\n is Return)
   mouse X Y             the pointer at X, Y in ST pixels (pinned in the top
                         left corner the first time, moved from where it is
                         after that)
@@ -72,15 +73,21 @@ stock", "@printer", "@monitor mono", "@memsize N" and "@mouse-step N" set those 
                         and a VBL slot reach it
   svar INDEX VALUE      shared variable INDEX becomes VALUE (hex), as the
                         firmware writes it (fork only)
-  cardfile PATTERN NBYTES FRAMES [QUIET]
+  jobbytes JOB NBYTES FRAMES [QUIET]
                         wait until the printer hook has taken NBYTES since
                         the ST booted, then nothing for QUIET frames (500),
-                        and the card's files matching PATTERN (the jobs,
-                        e.g. PRINTER/*.PRN) hold all it took (fork only)
+                        and the jobs the firmware has logged as closed (job
+                        number JOB, or * for all) hold all it took: a job's
+                        file is deleted once its PDF is written, so the log's
+                        size and MD5 stand for its bytes (fork only)
+  jobsame JOB FILE      FAILs unless job JOB's logged size and MD5 are those
+                        of FILE (in the repository, or job:N, another job's)
+  pagesdone FRAMES      wait until every job logged as closed is rendered
+                        (or its PDF failed) (fork only)
   cardsame PATH FILE    FAILs unless PATH on the card equals FILE, byte for byte
                         (FILE in the repository, or card:PATH on the card)
   hookdone NBYTES FRAMES [QUIET]
-                        wait as cardfile does, then FAILs unless the RP
+                        wait as jobbytes does, then FAILs unless the RP
                         answered every block the hook sent (fork only)
   cardput PATH          an empty file PATH on the card (a file where the
                         firmware wants a folder: the card fails for it)
@@ -112,6 +119,7 @@ Usage:  emu_harness.py --setup st-104 --test template-menu
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -160,6 +168,10 @@ PRT = read_layout(ROOT / "target/atarist/src/inc/printer_layout.s")
 # The RP ends a print job after IDLE_SECONDS without a block: its default.
 IDLE_FRAMES = 50 * int(re.search(r'ACONFIG_PARAM_IDLE_SECONDS, SETTINGS_TYPE_INT, "(\d+)"',
                                  (ROOT / "rp/src/aconfig.c").read_text()).group(1))
+# A debug build's log line for each job closed (rp/src/printer.c).
+JOB_CLOSED = re.compile(rb"printer: job (\d{8}) closed, (\d+) bytes, MD5 ([0-9a-f]{32})")
+# ... and for each job rendered, or whose PDF failed (rp/src/pages.c).
+JOB_RENDERED = re.compile(rb"pages: job (\d{8})(?: rendered|: its PDF not written)")
 SCREEN_TOLERANCE = 0.002  # a screen equals its reference: this share of pixels may differ
 MOUSE_STEP = 8            # pixels a frame at most: Hatari drops what the IKBD has no room for
 MOUSE_PIN = (640, 400)    # more than any ST screen
@@ -414,8 +426,9 @@ class Run:
         self.wait_frames(2)
 
     def step_type(self, *words):
-        """Types TEXT: letters, digits and the layout's own characters
-        (LAYOUTS: " @ ' \\ _) by the key the running TOS expects."""
+        """Types TEXT: letters (capitals with Shift), digits and the layout's
+        own characters (LAYOUTS: " @ ' \\ _) by the key the running TOS
+        expects."""
         text = " ".join(words).encode().decode("unicode_escape")
         layout = LAYOUTS.get(self.tos_country, {})
         for ch in text:
@@ -426,9 +439,9 @@ class Run:
                 self.press(key)
                 if shifted:
                     self.hatari.send("hatari-event keyup 0x2a")
-            elif ch in TYPE_SHIFTED:
+            elif ch in TYPE_SHIFTED or ch.isupper():
                 self.hatari.send("hatari-event keydown 0x2a")
-                self.press(TYPE_SHIFTED[ch])
+                self.press(TYPE_SHIFTED.get(ch, ch.lower()))
                 self.hatari.send("hatari-event keyup 0x2a")
             else:
                 self.press(TYPE_KEYS.get(ch, ch))
@@ -680,22 +693,51 @@ class Run:
             self.wait_frames(int(quiet))
         return counters
 
-    def step_cardfile(self, pattern, nbytes, frames, quiet="500"):
+    def closed_jobs(self):
+        """The jobs the firmware has logged as closed: number -> (size, MD5)."""
+        return {int(n): (int(size), md5.decode())
+                for n, size, md5 in JOB_CLOSED.findall(self.hatari.output())}
+
+    def step_jobbytes(self, job, nbytes, frames, quiet="500"):
         """Wait until the printer hook has taken NBYTES and then nothing for
-        QUIET frames (as the printer step's quiet), and until the files
-        matching PATTERN on the firmware's card (the run's sd/; a job is a
-        file once it has ended) hold every byte it took."""
-        self.need_fork("cardfile")
+        QUIET frames (as the printer step's quiet), and until the jobs the
+        firmware has logged as closed (JOB, or * for all) hold every byte it
+        took."""
+        self.need_fork("jobbytes")
         counters = self.wait_hook(nbytes, frames, quiet)
-        card = lambda: sum(f.stat().st_size for f in (self.run_dir / "sd").glob(pattern))
+        logged = lambda: sum(size for n, (size, _) in self.closed_jobs().items()
+                             if job == "*" or n == int(job))
         def complete():
             taken, dropped, buffered = counters()
-            return buffered == 0 and card() == taken - dropped
-        # A job is a file once the RP's idle timeout has ended it.
-        self.wait_for(2 * IDLE_FRAMES, complete, f"{pattern} with every byte the hook took")
+            return buffered == 0 and logged() == taken - dropped
+        # A job closes once the RP's idle timeout has ended it.
+        self.wait_for(2 * IDLE_FRAMES, complete, f"job {job} with every byte the hook took")
+
+    def step_pagesdone(self, frames):
+        """Wait until every job the firmware has logged as closed has been
+        rendered (or its PDF has failed)."""
+        self.need_fork("pagesdone")
+        def done():
+            out = self.hatari.output()
+            closed = {int(n) for n, _, _ in JOB_CLOSED.findall(out)}
+            return closed <= {int(n) for n in JOB_RENDERED.findall(out)}
+        self.wait_for(int(frames), done, "every closed job rendered")
+
+    def step_jobsame(self, job, expected):
+        """FAILs unless job JOB's logged size and MD5 are those of the file
+        EXPECTED (relative to the repository), or of job:N."""
+        jobs = self.closed_jobs()
+        got = jobs.get(int(job))
+        if expected.startswith("job:"):
+            want = jobs.get(int(expected[4:]))
+        else:
+            data = (ROOT / expected).read_bytes()
+            want = (len(data), hashlib.md5(data).hexdigest())
+        if got is None or got != want:
+            raise StepFailed(f"job {job}: {got}, {expected}: {want}")
 
     def step_hookdone(self, nbytes, frames, quiet="500"):
-        """Wait as cardfile does, then FAIL unless the RP answered every
+        """Wait as jobbytes does, then FAIL unless the RP answered every
         block: the buffer is empty and nothing was dropped."""
         self.need_fork("hookdone")
         counters = self.wait_hook(nbytes, frames, quiet)
@@ -861,12 +903,16 @@ def load_steps(args):
         first = ['text "Atari +: (ST|STE|Mega STE), TOS" 1500']
         if args.hook == "off":
             first.append("svar 2 0")
+        if args.paper == "letter":
+            first += ["type put_str PAPER LETTER", "key 0x1c", "key m", "key 0x1c",
+                      'text "Atari +: (ST|STE|Mega STE), TOS" 300']
         first += ["key f", "key 0x1c"]
         steps = first + steps
         if args.hook == "on":
             # What reaches the printer port with the hook off reaches the card.
             steps = [re.sub(r"^printer (\d+ \d+(?: \d+)?)$",
-                            r"cardfile PRINTER/*.PRN \1", st) for st in steps]
+                            r"jobbytes * \1", st) for st in steps]
+            steps.append("pagesdone 6000")
     return steps
 
 
@@ -933,6 +979,8 @@ def main():
     ap.add_argument("--hook", choices=("on", "off"), default="on",
                     help="with --via-firmware: off clears the printer's switch first, so the "
                          "printer port gets what the hook would")
+    ap.add_argument("--paper", choices=("a4", "letter"), default="a4",
+                    help="with --via-firmware: letter puts the PAPER setting to LETTER first")
     ap.add_argument("--timeout", type=float, default=300, help="host seconds for the whole run")
     args = ap.parse_args()
 

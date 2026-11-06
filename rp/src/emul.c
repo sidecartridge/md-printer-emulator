@@ -527,6 +527,7 @@ void emul_start() {
             sdcardErr);
   } else {
     DPRINTF("SD card found & initialized\n");
+    pages_init();
   }
 
   // Initialize the display again (in case the terminal emulator changed it)

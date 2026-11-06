@@ -24,9 +24,6 @@ typedef enum {
   JOB_FAILED,   // the card failed: the rest of the job is dropped
 } JobState;
 
-// A job's path: the folder, eight digits and the extension.
-#define PRINTER_PATH_SIZE (SETTINGS_MAX_VALUE_LENGTH + 16)
-
 static uint8_t ring[PRINTER_RING_SIZE];
 static uint32_t ringHead;  // the next byte written by the callback
 static uint32_t ringTail;  // the next byte the main loop writes to the card
@@ -152,19 +149,27 @@ void __not_in_flash_func(printer_command_cb)(TransmissionProtocol *protocol,
   counters.bytes += length;
 }
 
-static void jobPath(char *path, size_t size, uint32_t number,
-                    const char *extension) {
+const char *printer_folder(void) { return folder; }
+
+void printer_jobPath(char *path, size_t size, uint32_t number,
+                     const char *extension) {
   snprintf(path, size, "%s/%08lu%s", folder, (unsigned long)number, extension);
 }
 
+// A job keeps its number while any of its files is on the card: the job, or
+// its PDF once the job is deleted.
 static bool onCard(uint32_t number) {
+  static const char *const extensions[] = {
+      PRINTER_JOB_EXTENSION, PRINTER_TEMP_EXTENSION, PAGES_PDF_EXTENSION,
+      PAGES_PDF_TEMP_EXTENSION};
   char path[PRINTER_PATH_SIZE];
-  jobPath(path, sizeof(path), number, PRINTER_JOB_EXTENSION);
-  if (f_stat(path, NULL) == FR_OK) {
-    return true;
+  for (size_t i = 0; i < sizeof(extensions) / sizeof(extensions[0]); i++) {
+    printer_jobPath(path, sizeof(path), number, extensions[i]);
+    if (f_stat(path, NULL) == FR_OK) {
+      return true;
+    }
   }
-  jobPath(path, sizeof(path), number, PRINTER_TEMP_EXTENSION);
-  return f_stat(path, NULL) == FR_OK;
+  return false;
 }
 
 // A job's first bytes: its file, under the temporary name, and the next
@@ -189,7 +194,7 @@ static void openJob(void) {
     return;
   }
   char path[PRINTER_PATH_SIZE];
-  jobPath(path, sizeof(path), number, PRINTER_TEMP_EXTENSION);
+  printer_jobPath(path, sizeof(path), number, PRINTER_TEMP_EXTENSION);
   res = f_open(&file, path, FA_WRITE | FA_CREATE_NEW);
   if (res != FR_OK) {
     DPRINTF("printer: cannot open %s (%d)\n", path, res);
@@ -211,8 +216,8 @@ static void closeJob(void) {
   if (job == JOB_WRITING) {
     char temp[PRINTER_PATH_SIZE];
     char final[PRINTER_PATH_SIZE];
-    jobPath(temp, sizeof(temp), jobNumber, PRINTER_TEMP_EXTENSION);
-    jobPath(final, sizeof(final), jobNumber, PRINTER_JOB_EXTENSION);
+    printer_jobPath(temp, sizeof(temp), jobNumber, PRINTER_TEMP_EXTENSION);
+    printer_jobPath(final, sizeof(final), jobNumber, PRINTER_JOB_EXTENSION);
     FRESULT res = f_close(&file);
     if (res == FR_OK) {
       res = f_rename(temp, final);
@@ -220,10 +225,10 @@ static void closeJob(void) {
     if (res == FR_OK) {
       counters.jobs++;
       digestLog(jobNumber);
-      pages_jobClosed(final, jobNumber);
+      pages_jobClosed(jobNumber);
     } else {
-      DPRINTF("printer: job %08lu not closed (%d)\n",
-              (unsigned long)jobNumber, res);
+      DPRINTF("printer: job %08lu not closed (%d)\n", (unsigned long)jobNumber,
+              res);
       counters.writeErrors++;
     }
   }

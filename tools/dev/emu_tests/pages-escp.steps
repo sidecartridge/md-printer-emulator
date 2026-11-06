@@ -1,9 +1,11 @@
-# The RP renders a closed job as an FX-80 prints it: our ESC/P pages (TEXT.PRN
-# then GRAPH.PRN, sent by PRFILES as in hook-escp) become one job, read back
-# from the card once it closes and rendered a little at a time in the main
-# loop. Its three pages must be the pixels the host test draws for the two
-# files (tools/printer/golden/TEXT.PRN.pages and GRAPH.PRN.pages): the debug
-# build logs each page's MD5.
+# The RP renders a closed job as an FX-80 prints it and writes it as a PDF:
+# our ESC/P pages (TEXT.PRN then GRAPH.PRN, sent by PRFILES as in hook-escp)
+# become one job, read back from the card once it closes and rendered a
+# little at a time in the main loop. Its three pages must be the pixels the
+# host test draws for the two files (tools/printer/golden/TEXT.PRN.pages and
+# GRAPH.PRN.pages): the debug build logs each page's MD5. The PDF must be the
+# one tools/printer/render writes for the same bytes (make_bench_disks.sh's
+# escp-expected.pdf), and the job deleted once it is.
 @disk-a tools/dev/builds/disks/escp.st
 text "Atari +: (ST|STE|Mega STE), TOS" 1500
 key f
@@ -12,8 +14,10 @@ wait 100
 key 0x01
 wait 900
 key 0x39
-cardfile PRINTER/*.PRN 2938 3000
-log "pages: job 00000001 page 1 1985x2526 MD5 d6727461a550373fca72c38a15b55322" 600
-log "pages: job 00000001 page 2 1985x2526 MD5 69dbd8d0aea2e12be26a1a194e56d43f" 600
-log "pages: job 00000001 page 3 1985x2526 MD5 31cc0209b8ca431bc9b935d09b6f1920" 600
-log "pages: job 00000001 rendered, 3 pages, [0-9]+ us, 0 dots lost" 600
+log "pages: job 00000001 page 1 1985x2526 MD5 3b96f3a221f886f6629eeccbade871f8" 3000
+log "pages: job 00000001 page 2 1985x2526 MD5 d8e2c2cb7b4b1e426e84909bd622f281" 600
+log "pages: job 00000001 page 3 1985x2526 MD5 5c84df195515fb80d961d78c9fa8908d" 600
+log "pages: job 00000001 rendered, 3 pages, PDF 32366 bytes, [0-9]+ us, longest pass [0-9]+ us, 0 dots lost" 600
+cardsame PRINTER/00000001.pdf tools/dev/builds/disks/escp-expected.pdf
+cardnone PRINTER/*.PRN
+cardnone PRINTER/*.PDT

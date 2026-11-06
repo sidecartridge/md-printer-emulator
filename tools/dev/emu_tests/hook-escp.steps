@@ -1,9 +1,10 @@
 # What the ST prints reaches the RP intact: our ESC/P pages (TEXT.PRN and
 # GRAPH.PRN, sent byte by byte through BIOS Bconout(0) by PRFILES from the
 # floppy's AUTO folder) go through the hook, as 1 KB blocks and a last one
-# sent when printing pauses, to the RP, which writes them as one job,
-# PRINTER/00000001.PRN on its card, once its idle timeout has passed: equal
-# to the two files byte for byte.
+# sent when printing pauses, to the RP, which writes them as one job on its
+# card, closed once its idle timeout has passed: equal to the two files byte
+# for byte (the size and MD5 the RP logs as it closes the job, whose file is
+# deleted once its PDF is written).
 @disk-a tools/dev/builds/disks/escp.st
 text "Atari +: (ST|STE|Mega STE), TOS" 1500
 key f
@@ -12,6 +13,6 @@ wait 100
 key 0x01
 wait 900
 key 0x39
-cardfile PRINTER/*.PRN 2938 3000
-cardsame PRINTER/00000001.PRN tools/dev/builds/disks/escp-expected.prn
+jobbytes * 2938 3000
+jobsame 1 tools/dev/builds/disks/escp-expected.prn
 hookstate

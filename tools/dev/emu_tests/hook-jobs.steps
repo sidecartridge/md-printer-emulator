@@ -1,9 +1,10 @@
 # Print jobs on the card: each time PRFILES prints our ESC/P pages (escp.st's
 # AUTO folder, at every boot) is one job, a file in PRINTER/ numbered from the
-# NEXT_JOB setting, under its final name once the RP's idle timeout has
-# passed. A warm reset gives the second job; a cold reset restarts the RP,
-# whose NEXT_JOB setting, stored in flash as job 2 ended, is 3: the third job
-# is 00000003.PRN. Each file equals the two pages byte for byte.
+# NEXT_JOB setting, closed once the RP's idle timeout has passed. A warm reset
+# gives the second job; a cold reset restarts the RP, whose NEXT_JOB setting,
+# stored in flash as job 2 ended, is 3: the third job is number 3. Each job
+# equals the two pages byte for byte (the size and MD5 the RP logs as it
+# closes it).
 @disk-a tools/dev/builds/disks/escp.st
 text "Atari +: (ST|STE|Mega STE), TOS" 1500
 key f
@@ -12,16 +13,16 @@ wait 100
 key 0x01
 wait 900
 key 0x39
-cardfile PRINTER/00000001.PRN 2938 3000
-cardsame PRINTER/00000001.PRN tools/dev/builds/disks/escp-expected.prn
+jobbytes 1 2938 3000
+jobsame 1 tools/dev/builds/disks/escp-expected.prn
 reset warm
 newlog "Setting shared variable 1 to" 1500
 wait 100
 key 0x01
 wait 900
 key 0x39
-cardfile PRINTER/00000002.PRN 2938 3000
-cardsame PRINTER/00000002.PRN tools/dev/builds/disks/escp-expected.prn
+jobbytes 2 2938 3000
+jobsame 2 tools/dev/builds/disks/escp-expected.prn
 reset cold
 newlog "Cartridge image in RAM verified" 1500
 newlog "Setting shared variable 1 to" 1500
@@ -40,5 +41,5 @@ wait 100
 key 0x01
 wait 900
 key 0x39
-cardfile PRINTER/00000003.PRN 2938 3000
-cardsame PRINTER/00000003.PRN tools/dev/builds/disks/escp-expected.prn
+jobbytes 3 2938 3000
+jobsame 3 tools/dev/builds/disks/escp-expected.prn
