@@ -1,0 +1,49 @@
+# GDOS to an HP LaserJet: as print-easydraw, the drawing printed through
+# OUTPRINT, from a copy of the disk whose device 21 is Timeworks DTP's GDOS
+# LaserJet driver (HP_LJET.SYS) instead of the FX-80's, with no printer fonts
+# (make_program_disks.sh). What it sends is PCL. Positions are medium
+# resolution's.
+@printer
+@disk-a tools/dev/builds/disks/easydraw-laserjet.st
+wait 100
+key 0x01
+wait 2500
+# the first click after boot is lost: an empty spot first
+mouse 400 150
+click left 2
+wait 25
+# File > OUTPRINT..., don't save
+mouse 87 5
+wait 25
+mouse 124 87
+click left 2
+wait 200
+mouse 347 127
+click left 2
+wait 800
+shot outprint
+# Edit > Add Name (Alt A): DRAWINGS\HOUSE.GEM
+keydown 0x38
+key a
+keyup 0x38
+wait 150
+mouse 244 105
+click left 2
+wait 150
+key 0x01
+type house.gem
+key 0x1c
+wait 150
+shot listed
+# File > Start Outprint (Ctrl P)
+keydown 0x1d
+key p
+keyup 0x1d
+wait 300
+shot start
+# Device: Printer (the default), OK
+printwatch
+mouse 455 129
+click left 2
+printer 1000 60000
+shot printed

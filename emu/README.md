@@ -86,6 +86,8 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
 | `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`), the PDF equals `tools/printer/render`'s byte for byte, and the job is deleted |
 | `pages-letter` | the `PAPER` setting put to `LETTER` in the setup menu: the job's pages are 8.5 x 11 inches, the host test's Letter goldens, and the PDF `tools/printer/render --letter`'s byte for byte |
+| `pages-laserjet` | a job that starts in PCL is printed by the HP LaserJet II whatever `PRINTER` says: our PCL streams, one of whose pages moves back up and is drawn band by band; its pages are the host test's, and its PDF `tools/printer/render`'s byte for byte |
+| `pages-laserjet-text` | the `PRINTER` setting put to `LASERJET` in the setup menu: plain text with no escape code is printed by the LaserJet, in its Courier, the pixels and the PDF of `tools/printer/render --laserjet` |
 | `pages-recovery` | the RP restarts mid-job: at boot the job is closed and rendered, an unfinished PDF deleted, and the next job takes the next number |
 | `impossible` | must FAIL: the harness can fail |
 

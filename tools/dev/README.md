@@ -280,6 +280,9 @@ python3 tools/dev/power_cycles.py                            # cold boots: menu 
   emulated tests' `printer.out` and the jobs on the card. It skips the data of bit images and
   user-defined characters, so their bytes are never taken for commands, and stops with the
   offset at a sequence it does not know. `--sum` gives one table for all the files.
+- `pcl_scan.py FILE...` does the same for an HP LaserJet's PCL: each command (`ESC *b#W`,
+  `ESC &l#O`, ...) with the values it was given, skipping the data of raster rows, downloaded
+  fonts and transparent print.
 - `printertopdf.sh FILE OUT` renders a stream with PrinterToPDF (RWAP Software, GPL-3.0), a
   second opinion for the FX-80 renderer: as a 9-pin printer with its Atari character set, A4, a
   PDF per page in `OUT/pdf/`. It runs in Docker, built from `printertopdf/Dockerfile` at a fixed

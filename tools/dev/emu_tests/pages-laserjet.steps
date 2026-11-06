@@ -1,0 +1,28 @@
+# The RP prints a job that starts in PCL as the HP LaserJet II, whatever the
+# PRINTER setting says (FX80, its default): our PCL streams (RASTER.PCL as
+# TEXT.PRN, PAGES.PCL as GRAPH.PRN, sent by PRFILES) become one job of 8
+# pages at 300 dpi. RASTER.PCL moves back up its page, so the RP draws that
+# page band by band, a pass over its bytes for each. The pages must be the
+# pixels the host test draws (tools/printer/render, make_bench_disks.sh's
+# pcl-expected.pages), and the PDF the one it writes, byte for byte.
+@disk-a tools/dev/builds/disks/pcl.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+key 0x39
+log "pages: job 00000001 page 1 2480x3507 MD5 cd73e7a278d9837764bfd1689d2f4409" 6000
+log "pages: job 00000001 page 2 2480x3507 MD5 7051a417e8f6bcd156e0a2b28f010e4f" 3000
+log "pages: job 00000001 page 3 2480x3507 MD5 7051a417e8f6bcd156e0a2b28f010e4f" 3000
+log "pages: job 00000001 page 4 2480x3507 MD5 7051a417e8f6bcd156e0a2b28f010e4f" 3000
+log "pages: job 00000001 page 5 2480x3507 MD5 ff3d7a8ebeb6b2beee8d5384b99d2241" 3000
+log "pages: job 00000001 page 6 2480x3507 MD5 ff3d7a8ebeb6b2beee8d5384b99d2241" 3000
+log "pages: job 00000001 page 7 2480x3507 MD5 1ca088a57952deb74fdba7ed013a3f93" 3000
+log "pages: job 00000001 page 8 2480x3507 MD5 7051a417e8f6bcd156e0a2b28f010e4f" 3000
+log "pages: job 00000001 rendered, 8 pages, PDF 68103 bytes, [0-9]+ us, longest pass [0-9]+ us, 0 dots lost" 1200
+log "pages: job 00000001: LaserJet, [0-9]+ passes over its pages" 60
+cardsame PRINTER/00000001.pdf tools/dev/builds/disks/pcl-expected.pdf
+cardnone PRINTER/*.PRN
+cardnone PRINTER/*.PDT

@@ -1,0 +1,30 @@
+# The PRINTER setting, set to LASERJET in the setup menu as a user does it,
+# sends a job with no escape code at all to the HP LaserJet II: plain text
+# (the desktop test's PRINT.TXT, twice, sent by PRFILES) printed in its
+# Courier 10 pitch, one page at 300 dpi. Its pixels must be the ones
+# tools/printer/render --laserjet draws, and its PDF the one it writes
+# (make_bench_disks.sh's plain-laserjet.pages and plain-laserjet.pdf).
+@disk-a tools/dev/builds/disks/plain.st
+text "Atari +: (ST|STE|Mega STE), TOS" 1500
+type put_str PRINTER LASERJET
+key 0x1c
+type save
+key 0x1c
+key s
+key 0x1c
+type print
+key 0x1c
+text "PRINTER .STR.: LASERJET" 300
+key m
+key 0x1c
+text "Atari +: (ST|STE|Mega STE), TOS" 300
+key f
+key 0x1c
+wait 100
+key 0x01
+wait 900
+key 0x39
+log "pages: job 00000001 page 1 2480x3507 MD5 cab65f82a7244f93296370d3a0d3317e" 3000
+log "pages: job 00000001 rendered, 1 pages, PDF 48804 bytes, [0-9]+ us, longest pass [0-9]+ us, 0 dots lost" 1200
+log "pages: job 00000001: LaserJet, [0-9]+ passes over its pages" 60
+cardsame PRINTER/00000001.pdf tools/dev/builds/disks/plain-laserjet.pdf

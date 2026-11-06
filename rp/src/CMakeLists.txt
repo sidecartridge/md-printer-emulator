@@ -142,6 +142,9 @@ target_sources(${PROJECT_NAME} PRIVATE
         fx80/fx80.c
         fx80/raster.c
         pdf/deflate.c
+        pcl/pcl.c
+        pcl/pclfont.c
+        pcl/pclpage.c
         pdf/pdf.c
         pdfvol/pdfvol.c
         md5/md5.c

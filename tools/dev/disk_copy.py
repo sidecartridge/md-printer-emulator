@@ -5,10 +5,11 @@ FX table as PRINTER.CFG, say). The original image is only read; the copy is a
 plain .ST (an .MSA is converted with Hatari's hmsa first). Pasti (.STX) images
 cannot be copied this way.
 
-Usage:  disk_copy.py IN OUT [--copy FROM=TO ...] [--put FILE=TO ...]
+Usage:  disk_copy.py IN OUT [--delete PATH ...] [--copy FROM=TO ...] [--put FILE=TO ...]
         --copy PRINTERS\\EPSON_FX.CFG=PRINTER.CFG copies a file of the disk
         over another (paths on the disk, \\ or / between folders).
         --put FILE=TO writes a file from this computer onto the copy.
+        --delete PATH removes a file of the disk first, for room.
 """
 import argparse
 import os
@@ -33,6 +34,7 @@ def main():
     ap.add_argument("out")
     ap.add_argument("--copy", action="append", default=[], metavar="FROM=TO")
     ap.add_argument("--put", action="append", default=[], metavar="FILE=TO")
+    ap.add_argument("--delete", action="append", default=[], metavar="PATH")
     args = ap.parse_args()
     src = Path(args.image)
     if src.suffix.lower() == ".stx":
@@ -43,6 +45,8 @@ def main():
         if work.suffix == ".msa":
             subprocess.run([str(HMSA), str(work)], check=True, stdout=subprocess.DEVNULL)
             work = work.with_suffix(".st")
+        for path in args.delete:
+            mtools("mdel", "-i", str(work), f"::/{path.replace(chr(92), '/')}")
         for pair in args.copy:
             frm, to = (p.replace("\\", "/") for p in pair.split("=", 1))
             mtools("mcopy", "-n", "-i", str(work), f"::/{frm}", f"{tmp}/file")
@@ -52,7 +56,8 @@ def main():
             mtools("mcopy", "-o", "-i", str(work), frm, f"::/{to.replace(chr(92), '/')}")
         shutil.copy(work, args.out)
     print(f"disk_copy.py: {args.out} (from {src.name}"
-          + "".join(", " + c for c in args.copy + args.put) + ")")
+          + "".join(", " + c for c in args.copy + args.put)
+          + "".join(", -" + d for d in args.delete) + ")")
     return 0
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """pdfcheck.py: checks a PDF the renderer wrote against the pages it drew.
 
-Usage:  pdfcheck.py FILE.pdf PAGES
+Usage:  pdfcheck.py [--dpi X Y] FILE.pdf PAGES
         PAGES is render's output for the same stream ("page N WxH MD5" per
         line). Its structure must be exact, since a reader that repairs a
         file without a word (Acrobat) would hide a fault: startxref finds the
@@ -9,7 +9,7 @@ Usage:  pdfcheck.py FILE.pdf PAGES
         trailer's /Size is the table's, and each stream holds as many bytes
         as its /Length says. pdfinfo (poppler) must read the PDF without a
         word on stderr, with as many pages, each the size of its pixels at
-        240 x 216 dpi.
+        240 x 216 dpi (the FX-80's; --dpi 300 300 for the LaserJet's).
         Each image must inflate (zlib, its Adler-32 checked) to the page's
         pixels, and pdfimages must decode it to them too, its PBM's unused
         bits at the end of each row aside. Prints ok or FAIL and why.
@@ -59,9 +59,14 @@ def check_structure(data):
 
 
 def main():
-    if len(sys.argv) != 3:
+    global DPI_X, DPI_Y
+    args = sys.argv[1:]
+    if args[:1] == ["--dpi"]:
+        DPI_X, DPI_Y = int(args[1]), int(args[2])
+        args = args[3:]
+    if len(args) != 2:
         sys.exit(__doc__)
-    pdf, pages = sys.argv[1], sys.argv[2]
+    pdf, pages = args
     want = []
     for line in open(pages):
         _, _, size, md5 = line.split()
