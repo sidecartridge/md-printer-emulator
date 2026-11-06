@@ -11,6 +11,7 @@ static SettingsConfigEntry defaultEntries[] = {
     {ACONFIG_PARAM_NEXT_JOB, SETTINGS_TYPE_INT, "1"},
     {ACONFIG_PARAM_IDLE_SECONDS, SETTINGS_TYPE_INT, "10"},
     {ACONFIG_PARAM_NEXT_PDF, SETTINGS_TYPE_INT, "1"},
+    {ACONFIG_PARAM_PAPER, SETTINGS_TYPE_STRING, "A4"},
 };
 
 // Create a global context for our settings

@@ -142,9 +142,8 @@ int main(int argc, char **argv) {
     return 2;
   }
   const char *file = argv[a];
-  // A4, 210 x 297 mm; Letter, 8.5 x 11 inches.
-  int32_t width = letter ? 85 * FX80_X_PER_INCH / 10 : 210 * FX80_X_PER_INCH * 10 / 254;
-  int32_t length = letter ? 11 * FX80_Y_PER_INCH : 297 * FX80_Y_PER_INCH * 10 / 254;
+  int32_t width = letter ? FX80_LETTER_WIDTH : FX80_A4_WIDTH;
+  int32_t length = letter ? FX80_LETTER_LENGTH : FX80_A4_LENGTH;
   static Render re;
   static Fx80 printer;
   re.dir = argv[a + 1];

@@ -12,6 +12,9 @@ make_escp_pages.py) leave out.
   MODES.PRN     proportional, master select's combinations and their
                 priorities, RAM characters (ESC &, ESC %, ESC :), the 8th
                 bit (ESC =, ESC >, ESC #), ESC 7, expanded with SO and DC4
+  LONG.PRN      continuous text: 150 numbered lines and no form feed until
+                the end, so the pages break where the form length the paper
+                gives at power-on ends (A4: after 69 lines, Letter: 65)
 
 Usage:  streams.py OUTDIR
 """
@@ -89,12 +92,18 @@ def modes():
     return out
 
 
+def long():
+    out = b"".join(line(f"Line {n} of 150, no form feed") for n in range(1, 151))
+    return out + FF
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
-    for name, data in (("MOVES.PRN", moves()), ("NATIONAL.PRN", national()), ("MODES.PRN", modes())):
+    for name, data in (("MOVES.PRN", moves()), ("NATIONAL.PRN", national()), ("MODES.PRN", modes()),
+                       ("LONG.PRN", long())):
         (out / name).write_bytes(data)
         print(f"{out / name}: {len(data)} bytes")
 

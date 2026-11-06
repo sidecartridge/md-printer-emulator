@@ -85,6 +85,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-romfree` | once the hook is installed, the CPU runs no code in the cartridge (it is resident in RAM) |
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
 | `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`), the PDF equals `tools/printer/render`'s byte for byte, and the job is deleted |
+| `pages-letter` | the `PAPER` setting put to `LETTER` in the setup menu: the job's pages are 8.5 x 11 inches, the host test's Letter goldens, and the PDF `tools/printer/render --letter`'s byte for byte |
 | `pages-recovery` | the RP restarts mid-job: at boot the job is closed and rendered, an unfinished PDF deleted, and the next job takes the next number |
 | `impossible` | must FAIL: the harness can fail |
 

@@ -4,7 +4,8 @@
 # in rp/src/fx80), writes our own test streams (tools/dev/st/make_escp_pages.py
 # and make_set128.py, the ST's; streams.py, the renderer's), renders each and
 # compares every page's MD5 with
-# golden/<stream>.pages, then again through the firmware's band of rows,
+# golden/<stream>.pages, on A4, and golden/<stream>.letter.pages, on Letter,
+# then again through the firmware's band of rows,
 # which must draw the same pages. Each stream's PDF (rp/src/pdf) must read
 # without errors and hold exactly those pages (pdfcheck.py; poppler's pdfinfo
 # and pdfimages). The pages are left as PNGs and job.pdf in
@@ -41,12 +42,14 @@ fi
 python3 "$ROOT/tools/dev/st/make_escp_pages.py" "$BUILD/streams" > /dev/null
 python3 "$ROOT/tools/dev/st/make_set128.py" "$BUILD/streams" > /dev/null
 python3 "$HERE/streams.py" "$BUILD/streams" > /dev/null
-# check NAME FILE GOLDEN: render FILE, compare its pages with GOLDEN
+# check NAME FILE GOLDEN [OPTION]: render FILE (with render's OPTION, e.g.
+# --letter), compare its pages with GOLDEN
 check() {
   local name="$1" file="$2" golden="$3" out="$BUILD/$1"
+  local options=("${@:4}")
   mkdir -p "$out/band"
   find "$out" -name 'page-*.png' -delete
-  "$BUILD/render" --pdf "$out/job.pdf" "$file" "$out" > "$out/pages"
+  "$BUILD/render" ${options[@]+"${options[@]}"} --pdf "$out/job.pdf" "$file" "$out" > "$out/pages"
   if [ "$UPDATE" = 1 ]; then
     mkdir -p "$(dirname "$golden")"
     cp "$out/pages" "$golden"
@@ -57,7 +60,8 @@ check() {
   elif ! diff -u "$golden" "$out/pages" > "$out/diff"; then
     echo "FAIL $name: pages differ from the golden ($out/diff; PNGs in $out)"
     fail=1
-  elif ! "$BUILD/render" --band "$BAND" "$file" "$out/band" | diff -q - "$out/pages" > /dev/null; then
+  elif ! "$BUILD/render" ${options[@]+"${options[@]}"} --band "$BAND" "$file" "$out/band" \
+       | diff -q - "$out/pages" > /dev/null; then
     echo "FAIL $name: a band of $BAND rows draws other pages than the whole page"
     fail=1
   elif ! pdf="$("$HERE/pdfcheck.py" "$out/job.pdf" "$out/pages")"; then
@@ -68,8 +72,9 @@ check() {
   fi
 }
 
-for stream in TEXT.PRN GRAPH.PRN SET128.TXT MOVES.PRN NATIONAL.PRN MODES.PRN; do
+for stream in TEXT.PRN GRAPH.PRN SET128.TXT MOVES.PRN NATIONAL.PRN MODES.PRN LONG.PRN; do
   check "$stream" "$BUILD/streams/$stream" "$HERE/golden/$stream.pages"
+  check "$stream.letter" "$BUILD/streams/$stream" "$HERE/golden/$stream.letter.pages" --letter
 done
 for capture in "$HERE"/local/*.prn; do
   [ -f "$capture" ] || continue

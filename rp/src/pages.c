@@ -21,9 +21,6 @@
 #include "pico/stdlib.h"
 #include "printer.h"
 
-// A4, 210 x 297 mm, in fx80.h's units.
-#define PAPER_WIDTH (210 * FX80_X_PER_INCH * 10 / 254)
-#define PAPER_LENGTH (297 * FX80_Y_PER_INCH * 10 / 254)
 // The band's buffer, wide enough for Letter (8.5 inches at 240 dpi).
 #define BAND_STRIDE ((85 * FX80_RASTER_DPI_X / 10 + 7) / 8)
 
@@ -126,6 +123,13 @@ static const Fx80Sink sink = {on_dot, on_page, NULL};
 static int setting_number(const char *key) {
   SettingsConfigEntry *entry = settings_find_entry(aconfig_getContext(), key);
   return entry != NULL ? atoi(entry->value) : 0;
+}
+
+// The PAPER setting: LETTER, or A4 for any other value.
+static bool paper_letter(void) {
+  SettingsConfigEntry *entry =
+      settings_find_entry(aconfig_getContext(), ACONFIG_PARAM_PAPER);
+  return entry != NULL && strcasecmp(entry->value, "LETTER") == 0;
 }
 
 // The next job to render, in RAM: it reaches flash with NEXT_JOB, which the
@@ -263,11 +267,13 @@ static void start(void) {
     advance();
     return;
   }
+  bool letter = paper_letter();
+  int32_t width = letter ? FX80_LETTER_WIDTH : FX80_A4_WIDTH;
+  int32_t length = letter ? FX80_LETTER_LENGTH : FX80_A4_LENGTH;
   pdf_begin(&pdf, write_card, &pdfFile);
-  fx80_raster_init(&raster, band, fx80_raster_width(PAPER_WIDTH),
-                   fx80_raster_height(PAPER_LENGTH), PAGES_BAND_ROWS, on_row,
-                   NULL);
-  fx80_init(&printer, &sink, PAPER_WIDTH, PAPER_LENGTH);
+  fx80_raster_init(&raster, band, fx80_raster_width(width),
+                   fx80_raster_height(length), PAGES_BAND_ROWS, on_row, NULL);
+  fx80_init(&printer, &sink, width, length);
   state = STATE_RENDERING;
   atEnd = false;
   bufferLength = bufferPos = 0;

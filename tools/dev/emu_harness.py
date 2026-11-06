@@ -36,8 +36,8 @@ options):
   keydown KEY, keyup KEY
                         hold or release a key (Alt-Help: keydown 0x38,
                         key 0x62, keyup 0x38)
-  type TEXT             type TEXT, one key at a time (lower-case letters,
-                        digits, space; \\n is Return)
+  type TEXT             type TEXT, one key at a time (letters, capitals with
+                        Shift, digits, space; \\n is Return)
   mouse X Y             the pointer at X, Y in ST pixels (pinned in the top
                         left corner the first time, moved from where it is
                         after that)
@@ -422,8 +422,9 @@ class Run:
         self.wait_frames(2)
 
     def step_type(self, *words):
-        """Types TEXT: letters, digits and the layout's own characters
-        (LAYOUTS: " @ ' \\ _) by the key the running TOS expects."""
+        """Types TEXT: letters (capitals with Shift), digits and the layout's
+        own characters (LAYOUTS: " @ ' \\ _) by the key the running TOS
+        expects."""
         text = " ".join(words).encode().decode("unicode_escape")
         layout = LAYOUTS.get(self.tos_country, {})
         for ch in text:
@@ -434,9 +435,9 @@ class Run:
                 self.press(key)
                 if shifted:
                     self.hatari.send("hatari-event keyup 0x2a")
-            elif ch in TYPE_SHIFTED:
+            elif ch in TYPE_SHIFTED or ch.isupper():
                 self.hatari.send("hatari-event keydown 0x2a")
-                self.press(TYPE_SHIFTED[ch])
+                self.press(TYPE_SHIFTED.get(ch, ch.lower()))
                 self.hatari.send("hatari-event keyup 0x2a")
             else:
                 self.press(TYPE_KEYS.get(ch, ch))

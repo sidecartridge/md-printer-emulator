@@ -7,7 +7,8 @@
 #   escp.st       a floppy with \AUTO\PRFILES.PRG (tools/dev/st/prfiles.s) and the
 #                 ESC/P test pages TEXT.PRN, GRAPH.PRN (tools/dev/st/make_escp_pages.py);
 #                 escp-expected.prn, the two as PRFILES sends them, and
-#                 escp-expected.pdf, its PDF as the firmware writes it
+#                 escp-expected.pdf and escp-expected-letter.pdf, its PDF as
+#                 the firmware writes it on A4 and on Letter
 #                 (tools/printer/render, the firmware's own renderer)
 #
 # Usage:  tools/dev/make_bench_disks.sh
@@ -34,4 +35,6 @@ cat "$WORK/escp/TEXT.PRN" "$WORK/escp/GRAPH.PRN" > "$OUT/escp-expected.prn"   # 
 make -s -C "$DEV/../printer"
 mkdir -p "$WORK/pages"
 "$DEV/builds/printer/render" --pdf "$OUT/escp-expected.pdf" "$OUT/escp-expected.prn" "$WORK/pages" > /dev/null
+"$DEV/builds/printer/render" --letter --pdf "$OUT/escp-expected-letter.pdf" "$OUT/escp-expected.prn" \
+  "$WORK/pages" > /dev/null
 "$DEV/make_floppy.sh" "$WORK/escp" "$OUT/escp.st" ESCP

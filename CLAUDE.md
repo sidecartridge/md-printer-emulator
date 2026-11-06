@@ -172,7 +172,8 @@ What a program prints on the ST becomes bytes on the RP:
 - **Pages** (`rp/src/pages.c`, `rp/src/fx80/`, `rp/src/pdf/`): once a job closes, the main loop
   reads it back from the card, 512 bytes at a time and about 1 ms a pass, and renders it as an
   Epson FX-80 prints it (`fx80.c`: ESC/P, codes 128-255 as the Atari's characters) into a 1-bit
-  A4 page at 240 x 216 dpi, through a band of 128 rows (`raster.c`; the page is 627 KB). Each row
+  page at 240 x 216 dpi, A4 or Letter as the `PAPER` setting says (`A4`, or `LETTER`), through a
+  band of 128 rows (`raster.c`; an A4 page is 627 KB). Each row
   goes straight into the job's PDF (`pdf.c`), one image a page, compressed with Flate by our own
   encoder (`deflate.c`: matches within the last 1 KB, fixed Huffman codes, 8 KB of RAM). The PDF
   is `nnnnnnnn.PDT` until it is whole, then `nnnnnnnn.pdf`, and the job's `.PRN` is deleted: it
