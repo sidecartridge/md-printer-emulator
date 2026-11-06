@@ -108,8 +108,22 @@ static const char *setting(const char *key, const char *fallback) {
   return entry != NULL && entry->value[0] != '\0' ? entry->value : fallback;
 }
 
-static bool laserjet(void) {
-  return strcasecmp(setting(ACONFIG_PARAM_PRINTER, "FX80"), "LASERJET") == 0;
+// The PRINTER setting's values, in the order P steps through them, and what
+// the menu calls them.
+static const char *const printers[][2] = {
+    {"AUTO", "Auto"},
+    {"FX80", "Epson FX-80"},
+    {"LASERJET", "HP LaserJet II"},
+};
+#define PRINTERS ((int)(sizeof(printers) / sizeof(printers[0])))
+
+// The setting's place in printers: any other value is Auto.
+static int printer_index(void) {
+  const char *value = setting(ACONFIG_PARAM_PRINTER, "AUTO");
+  for (int i = 0; i < PRINTERS; i++) {
+    if (strcasecmp(value, printers[i][0]) == 0) return i;
+  }
+  return 0;
 }
 
 static bool letter(void) {
@@ -368,8 +382,7 @@ static void refresh(bool force) {
 
 static void draw_settings(void) {
   char value[TERM_SCREEN_SIZE_X];
-  row_item(ROW_PRINTER_KIND, "[P]rinter",
-           laserjet() ? "HP LaserJet II" : "Epson FX-80");
+  row_item(ROW_PRINTER_KIND, "[P]rinter", printers[printer_index()][1]);
   row_item(ROW_PAPER, "P[a]per", letter() ? "Letter" : "A4");
   snprintf(value, sizeof(value), "%d s",
            atoi(setting(ACONFIG_PARAM_IDLE_SECONDS, "10")));
@@ -438,7 +451,7 @@ static void cmdPrinter(const char *arg) {
   (void)arg;
   halt(NULL);
   settings_put_string(aconfig_getContext(), ACONFIG_PARAM_PRINTER,
-                      laserjet() ? "FX80" : "LASERJET");
+                      printers[(printer_index() + 1) % PRINTERS][0]);
   save();
   menu_show();
 }

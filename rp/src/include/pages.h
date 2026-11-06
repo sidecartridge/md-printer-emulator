@@ -5,8 +5,8 @@
  *              and written as a PDF (pdf/pdf.h): a job is read back from the
  *              card once it has closed, a little at a time in the main loop,
  *              so receiving is never slowed. The PRINTER setting names the
- *              printer; a job that starts in PCL goes to the LaserJet
- *              whatever it says.
+ *              printer, or, in Auto, a job that starts in PCL goes to the
+ *              LaserJet and the rest to the FX-80.
  *              Debug builds log each page's size and the MD5 of its pixels,
  *              which tools/printer/render gives for the same job.
  *

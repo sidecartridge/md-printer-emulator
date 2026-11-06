@@ -1,5 +1,6 @@
-# The setup menu's keys, one each, as a user presses them: [P] toggles the
-# printer and [A] the paper, each shown at once; [T] steps through the idle
+# The setup menu's keys, one each, as a user presses them: [P] steps the
+# printer from Auto to the FX-80, the LaserJet and Auto again, [A] toggles the
+# paper, each shown at once; [T] steps through the idle
 # timeouts, 10 to 20, 30, 60, 120 and round to 5 s, which the job then ends
 # after; [O] opens the folder picker, in /PRINTER: RETURN on ".." goes up to
 # the card's root, the cursor keys move between its folders, RETURN opens
@@ -9,10 +10,13 @@
 @disk-a tools/dev/builds/disks/escp.st
 cardput JOBS/KEEP
 text "Machine +: (ST|STE|Mega STE), TOS" 1500
+text "\[P\]rinter +: Auto" 300
+key p
+text "\[P\]rinter +: Epson FX-80" 300
 key p
 text "\[P\]rinter +: HP LaserJet II" 300
 key p
-text "\[P\]rinter +: Epson FX-80" 300
+text "\[P\]rinter +: Auto" 300
 key a
 text "P\[a\]per +: Letter" 300
 key a

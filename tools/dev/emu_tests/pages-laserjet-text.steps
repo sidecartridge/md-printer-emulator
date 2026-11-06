@@ -1,11 +1,14 @@
-# The PRINTER setting, set to the LaserJet in the setup menu ([P]) as a user does it,
-# sends a job with no escape code at all to the HP LaserJet II: plain text
+# The PRINTER setting, put from Auto to the LaserJet in the setup menu ([P]
+# twice) as a user does it, sends a job with no escape code at all, which Auto
+# gives the FX-80, to the HP LaserJet II: plain text
 # (the desktop test's PRINT.TXT, twice, sent by PRFILES) printed in its
 # Courier 10 pitch, one page at 300 dpi. Its pixels must be the ones
 # tools/printer/render --laserjet draws, and its PDF the one it writes
 # (make_bench_disks.sh's plain-laserjet.pages and plain-laserjet.pdf).
 @disk-a tools/dev/builds/disks/plain.st
 text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key p
+text "\[P\]rinter +: Epson FX-80" 300
 key p
 text "\[P\]rinter +: HP LaserJet II" 300
 text "Machine +: (ST|STE|Mega STE), TOS" 300

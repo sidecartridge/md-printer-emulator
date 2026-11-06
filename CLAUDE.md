@@ -186,11 +186,13 @@ What a program prints on the ST becomes bytes on the RP:
   page's MD5 and the PDF's size, which `tools/printer/render [--pdf]` gives for the same job on
   the computer; `tools/printer/test.sh` is the host test (golden page MD5s of our own streams,
   each PDF checked with poppler by `pdfcheck.py`).
-- **The LaserJet** (`rp/src/pcl/`): a job is printed by an HP LaserJet II (PCL 4) instead of
-  the FX-80 when the `PRINTER` setting says `LASERJET` (default `FX80`), or whatever it says
-  when the job's first escape sequence is PCL's alone (`pcl_recognise`: ESC &, ESC *, ESC ( or
-  ESC % followed by a lowercase letter, a digit or a minus; ESC E, which both have, is passed
-  over). `pcl.c` follows the stream and draws its raster graphics (75-300 dpi, compression modes
+- **The LaserJet** (`rp/src/pcl/`): the `PRINTER` setting names the printer: `FX80` or
+  `LASERJET` always that one, as a real printer would, or `AUTO` (the default): a job whose first
+  escape sequence is PCL's alone goes to an HP LaserJet II (PCL 4), the rest, plain text
+  included, to the FX-80 (`pcl_recognise`: ESC &, ESC *, ESC ( or ESC % followed by a lowercase
+  letter, a digit or a minus; ESC E, which both have, is passed over). TOS's Alt-Help dump only
+  knows Epson and Atari dot-matrix codes, so on the LaserJet it prints garbage, as on a real
+  one; Auto gives it the FX-80. `pcl.c` follows the stream and draws its raster graphics (75-300 dpi, compression modes
   0-3) pixel for pixel on a 300 dpi page, with PCL's cursor, margins and page, and its text in the
   LaserJet II's built-in fonts (Courier 10 and 12 pitch, medium and bold; Line Printer), picked by
   pitch and stroke weight, in Roman-8, PC-8, ISO Latin 1 or ASCII, with the secondary font (SO,

@@ -6,11 +6,12 @@
  *              the bottom strip a countdown that starts the printer when it
  *              runs out (any key stops it).
  *
- * Keys, one each: P the printer (Epson FX-80 or HP LaserJet II), A the paper
- * (A4 or Letter), T the idle timeout, typed in, O the folder, from the card's
- * folders in md-drives-emulator's picker; E starts the printer and goes to
- * the desktop, X goes back to Booster. A change is stored at once and used
- * from the next job. The menu never deletes a PDF.
+ * Keys, one each: P steps the printer through Auto, Epson FX-80 and HP
+ * LaserJet II, A the paper through A4 and Letter, T the idle timeout through
+ * 5 to 120 seconds; O picks the folder among the card's, in md-drives-
+ * emulator's picker; E starts the printer and goes to the desktop, X goes
+ * back to Booster. A change is stored at once and used from the next job.
+ * The menu never deletes a PDF.
  */
 #ifndef MENU_H
 #define MENU_H

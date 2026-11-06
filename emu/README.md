@@ -71,7 +71,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | --- | --- |
 | `template-menu` | the setup menu appears; the ST's hello, machine and TOS arrive |
 | `template-firmware` | `[E]` starts the printer: the ST runs the user firmware |
-| `menu-keys` | the setup menu's keys: `P` and `A` toggle the printer and the paper, `T` steps through the timeouts (round again after 120 s), `O` opens the folder picker (up to the root, the cursor keys, into a folder, SPACE chooses it), `E` starts the printer, and a job lands in the new folder |
+| `menu-keys` | the setup menu's keys: `P` steps the printer through Auto, the FX-80 and the LaserJet, `A` toggles the paper, `T` steps through the timeouts (round again after 120 s), `O` opens the folder picker (up to the root, the cursor keys, into a folder, SPACE chooses it), `E` starts the printer, and a job lands in the new folder |
 | `menu-countdown` | untouched, the menu's countdown starts the printer by itself |
 | `menu-halt` | a key stops the countdown: the menu stays |
 | `template-reset` | warm resets: the menu again, then the user firmware once per reset |
@@ -89,8 +89,8 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `hook-althelp-hold` | Alt-Help held, then pressed again, during a screen dump: the job is one whole dump |
 | `pages-escp` | a closed job rendered as an FX-80 prints it: the debug build's MD5 of each page equals the host test's (`tools/printer/golden`), the PDF equals `tools/printer/render`'s byte for byte, and the job is deleted |
 | `pages-letter` | the `PAPER` setting put to `LETTER` in the setup menu: the job's pages are 8.5 x 11 inches, the host test's Letter goldens, and the PDF `tools/printer/render --letter`'s byte for byte |
-| `pages-laserjet` | a job that starts in PCL is printed by the HP LaserJet II whatever `PRINTER` says: our PCL streams, one of whose pages moves back up and is drawn band by band; its pages are the host test's, and its PDF `tools/printer/render`'s byte for byte |
-| `pages-laserjet-text` | the `PRINTER` setting put to `LASERJET` in the setup menu: plain text with no escape code is printed by the LaserJet, in its Courier, the pixels and the PDF of `tools/printer/render --laserjet` |
+| `pages-laserjet` | in Auto, `PRINTER`'s default, a job that starts in PCL is printed by the HP LaserJet II: our PCL streams, one of whose pages moves back up and is drawn band by band; its pages are the host test's, and its PDF `tools/printer/render`'s byte for byte |
+| `pages-laserjet-text` | the `PRINTER` setting put to the LaserJet in the setup menu: plain text with no escape code, which Auto gives the FX-80, is printed by the LaserJet, in its Courier, the pixels and the PDF of `tools/printer/render --laserjet` |
 | `pages-recovery` | the RP restarts mid-job: at boot the job is closed and rendered, an unfinished PDF deleted, and the next job takes the next number |
 | `impossible` | must FAIL: the harness can fail |
 

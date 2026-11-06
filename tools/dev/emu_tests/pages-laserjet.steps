@@ -1,5 +1,5 @@
-# The RP prints a job that starts in PCL as the HP LaserJet II, whatever the
-# PRINTER setting says (FX80, its default): our PCL streams (RASTER.PCL as
+# In Auto, the PRINTER setting's default, the RP prints a job that starts in
+# PCL as the HP LaserJet II: our PCL streams (RASTER.PCL as
 # TEXT.PRN, PAGES.PCL as GRAPH.PRN, sent by PRFILES) become one job of 8
 # pages at 300 dpi. RASTER.PCL moves back up its page, so the RP draws that
 # page band by band, a pass over its bytes for each. The pages must be the

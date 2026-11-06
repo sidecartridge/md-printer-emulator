@@ -19,7 +19,7 @@
 #define ACONFIG_PARAM_IDLE_SECONDS "IDLE_SECONDS"  // a job ends after this quiet
 #define ACONFIG_PARAM_NEXT_PDF "NEXT_PDF"          // the next job to render
 #define ACONFIG_PARAM_PAPER "PAPER"                // A4 or LETTER
-#define ACONFIG_PARAM_PRINTER "PRINTER"            // FX80 or LASERJET
+#define ACONFIG_PARAM_PRINTER "PRINTER"            // AUTO, FX80 or LASERJET
 
 #define ACONFIG_SUCCESS 0
 #define ACONFIG_INIT_ERROR -1
