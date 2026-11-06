@@ -9,6 +9,11 @@
  * the page drawn: through the band, as it moves down the page, or, for a page
  * that moves up, window by window, a pass over its bytes for each window of
  * the band's rows. Either way the rows are handed on in order, each once.
+ *
+ * A draw far below the band (the cursor sent down the page) would hand on
+ * every row between at once. The scan notes where that happens, the byte and
+ * the band's first row there; drawing, the band is moved there a few rows a
+ * step before that byte, so no step takes long.
  */
 #ifndef PCL_PAGE_H
 #define PCL_PAGE_H
@@ -19,7 +24,8 @@
 #include "fx80/raster.h"
 #include "pcl.h"
 
-#define PCL_PAGE_ROWS 32  // rows handed on at a time at a page's end
+#define PCL_PAGE_ROWS 32    // rows handed on at a time
+#define PCL_PAGE_JUMPS 256  // the band's long jumps noted a page
 
 // Reads up to size bytes; false if the source failed. *got 0 is its end.
 typedef bool (*PclRead)(void *ctx, uint8_t *data, uint32_t size, uint32_t *got);
@@ -31,6 +37,11 @@ typedef enum {
   PCL_PAGE_DONE,  // a page's rows are all handed on
   PCL_PAGE_END,   // the job is over
 } PclPageStep;
+
+typedef struct {
+  uint32_t offset;  // the source's offset of the byte that draws
+  int32_t top;      // the band's first row it needs
+} PclJump;
 
 typedef struct {
   Pcl pcl;
@@ -46,11 +57,14 @@ typedef struct {
   uint32_t offset;     // the source's offset of buffer[0]
   uint32_t pageStart;  // the source's offset of the page's first byte
   uint8_t phase;
-  bool pageEnded;   // the printer has finished the page
-  int32_t bandTop;  // the simulated band's first row
-  bool upward;      // the page draws above the band
-  uint32_t passes;  // passes over pages' bytes, the first scan included
-  bool failed;      // the source could not be read or rewound
+  bool pageEnded;                 // the printer has finished the page
+  int32_t bandTop;                // the simulated band's first row
+  bool upward;                    // the page draws above the band
+  PclJump jumps[PCL_PAGE_JUMPS];  // the page's long jumps, from its scan
+  uint16_t jumpCount;
+  uint16_t jumpNext;  // the next one, drawing
+  uint32_t passes;    // passes over pages' bytes, the first scan included
+  bool failed;        // the source could not be read or rewound
 } PclPage;
 
 /**

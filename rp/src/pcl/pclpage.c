@@ -28,7 +28,17 @@ static void scan_pixels(void *ctx, int32_t x, int32_t y, const uint8_t *bits,
   if (y < pp->bandTop) {
     pp->upward = true;
   } else if (y >= pp->bandTop + pp->raster->rows) {
-    pp->bandTop = y - pp->raster->rows + 1;
+    int32_t top = y - pp->raster->rows + 1;
+    uint32_t at = pp->offset + pp->pos - 1;  // the byte being followed
+    if (pp->jumpCount > 0 && pp->jumps[pp->jumpCount - 1].offset == at) {
+      pp->jumps[pp->jumpCount - 1].top = top;
+    } else if (top - pp->bandTop > PCL_PAGE_ROWS &&
+               pp->jumpCount < PCL_PAGE_JUMPS) {
+      pp->jumps[pp->jumpCount].offset = at;
+      pp->jumps[pp->jumpCount].top = top;
+      pp->jumpCount++;
+    }
+    pp->bandTop = top;
   }
 }
 
@@ -67,6 +77,7 @@ static void page_begin(PclPage *pp) {
   pp->pageStart = pp->offset + pp->pos;
   pp->bandTop = 0;
   pp->upward = false;
+  pp->jumpCount = 0;
   pp->pageEnded = false;
   set_sink(pp, true);
   pp->phase = PHASE_SCAN;
@@ -78,6 +89,7 @@ static bool rewind_page(PclPage *pp) {
   pp->pcl = pp->start;
   set_sink(pp, false);
   pp->pageEnded = false;
+  pp->jumpNext = 0;
   pp->passes++;
   if (pp->pageStart >= pp->offset && pp->pageStart <= pp->offset + pp->length) {
     pp->pos = pp->pageStart - pp->offset;  // still in the buffer
@@ -114,6 +126,16 @@ PclPageStep pcl_page_step(PclPage *pp) {
     case PHASE_SCAN:
     case PHASE_DRAW:
     case PHASE_WINDOW: {
+      if (pp->phase == PHASE_DRAW && pp->jumpNext < pp->jumpCount &&
+          pp->jumps[pp->jumpNext].offset == pp->offset + pp->pos) {
+        // A long jump down the page: the band moved there first, a few rows
+        // a step.
+        if (!fx80_raster_advance(pp->raster, pp->jumps[pp->jumpNext].top,
+                                 PCL_PAGE_ROWS)) {
+          return PCL_PAGE_BUSY;
+        }
+        pp->jumpNext++;
+      }
       int b = next_byte(pp);
       if (b >= 0) {
         pcl_byte(&pp->pcl, (uint8_t)b);

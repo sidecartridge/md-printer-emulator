@@ -67,6 +67,13 @@ void fx80_raster_pixels(Fx80Raster *r, int32_t x, int32_t y,
                         const uint8_t *bits, int32_t count, int32_t scale);
 
 /**
+ * @brief Hands on rows until row is the band's first, up to maxRows of them:
+ * a long jump down the page made a little at a time.
+ * @return true once row is reached.
+ */
+bool fx80_raster_advance(Fx80Raster *r, int32_t row, int32_t maxRows);
+
+/**
  * @brief A window of the page: from the first row not handed on, as many
  * rows as the band holds. Only what falls in it is drawn; nothing else is
  * lost, nor is a row handed on before fx80_raster_windowDone. A page drawn

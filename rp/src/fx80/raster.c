@@ -106,6 +106,12 @@ void fx80_raster_pixels(Fx80Raster *r, int32_t x, int32_t y,
   }
 }
 
+bool fx80_raster_advance(Fx80Raster *r, int32_t row, int32_t maxRows) {
+  if (row > r->height) row = r->height;
+  while (r->top < row && maxRows-- > 0) hand_on(r);
+  return r->top >= row;
+}
+
 void fx80_raster_window(Fx80Raster *r) {
   r->windowEnd = r->top + r->rows < r->height ? r->top + r->rows : r->height;
 }
