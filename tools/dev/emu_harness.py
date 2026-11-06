@@ -82,6 +82,8 @@ options):
                         size and MD5 stand for its bytes (fork only)
   jobsame JOB FILE      FAILs unless job JOB's logged size and MD5 are those
                         of FILE (in the repository, or job:N, another job's)
+  pagesdone FRAMES      wait until every job logged as closed is rendered
+                        (or its PDF failed) (fork only)
   cardsame PATH FILE    FAILs unless PATH on the card equals FILE, byte for byte
                         (FILE in the repository, or card:PATH on the card)
   hookdone NBYTES FRAMES [QUIET]
@@ -168,6 +170,8 @@ IDLE_FRAMES = 50 * int(re.search(r'ACONFIG_PARAM_IDLE_SECONDS, SETTINGS_TYPE_INT
                                  (ROOT / "rp/src/aconfig.c").read_text()).group(1))
 # A debug build's log line for each job closed (rp/src/printer.c).
 JOB_CLOSED = re.compile(rb"printer: job (\d{8}) closed, (\d+) bytes, MD5 ([0-9a-f]{32})")
+# ... and for each job rendered, or whose PDF failed (rp/src/pages.c).
+JOB_RENDERED = re.compile(rb"pages: job (\d{8})(?: rendered|: its PDF not written)")
 SCREEN_TOLERANCE = 0.002  # a screen equals its reference: this share of pixels may differ
 MOUSE_STEP = 8            # pixels a frame at most: Hatari drops what the IKBD has no room for
 MOUSE_PIN = (640, 400)    # more than any ST screen
@@ -709,6 +713,16 @@ class Run:
         # A job closes once the RP's idle timeout has ended it.
         self.wait_for(2 * IDLE_FRAMES, complete, f"job {job} with every byte the hook took")
 
+    def step_pagesdone(self, frames):
+        """Wait until every job the firmware has logged as closed has been
+        rendered (or its PDF has failed)."""
+        self.need_fork("pagesdone")
+        def done():
+            out = self.hatari.output()
+            closed = {int(n) for n, _, _ in JOB_CLOSED.findall(out)}
+            return closed <= {int(n) for n in JOB_RENDERED.findall(out)}
+        self.wait_for(int(frames), done, "every closed job rendered")
+
     def step_jobsame(self, job, expected):
         """FAILs unless job JOB's logged size and MD5 are those of the file
         EXPECTED (relative to the repository), or of job:N."""
@@ -889,12 +903,16 @@ def load_steps(args):
         first = ['text "Atari +: (ST|STE|Mega STE), TOS" 1500']
         if args.hook == "off":
             first.append("svar 2 0")
+        if args.paper == "letter":
+            first += ["type put_str PAPER LETTER", "key 0x1c", "key m", "key 0x1c",
+                      'text "Atari +: (ST|STE|Mega STE), TOS" 300']
         first += ["key f", "key 0x1c"]
         steps = first + steps
         if args.hook == "on":
             # What reaches the printer port with the hook off reaches the card.
             steps = [re.sub(r"^printer (\d+ \d+(?: \d+)?)$",
                             r"jobbytes * \1", st) for st in steps]
+            steps.append("pagesdone 6000")
     return steps
 
 
@@ -961,6 +979,8 @@ def main():
     ap.add_argument("--hook", choices=("on", "off"), default="on",
                     help="with --via-firmware: off clears the printer's switch first, so the "
                          "printer port gets what the hook would")
+    ap.add_argument("--paper", choices=("a4", "letter"), default="a4",
+                    help="with --via-firmware: letter puts the PAPER setting to LETTER first")
     ap.add_argument("--timeout", type=float, default=300, help="host seconds for the whole run")
     args = ap.parse_args()
 

@@ -89,12 +89,14 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `pages-recovery` | the RP restarts mid-job: at boot the job is closed and rendered, an unfinished PDF deleted, and the next job takes the next number |
 | `impossible` | must FAIL: the harness can fail |
 
-`tools/dev/hook_fidelity.sh TEST SETUP` runs a printing test twice on the firmware after
-`[F]irmware` (`--via-firmware`): with the printer switched off (`--hook off`), the printer port
-gets the reference; switched on, the RP's jobs, in order, must hold the same bytes.
-A job counts only once it has ended, so with the hook on a test's `printer` step becomes
-`jobbytes`, which waits until the hook has taken nothing for the same quiet time, its buffer is
-empty and the jobs hold every byte it took.
+`tools/dev/hook_fidelity.sh TEST SETUP [--paper letter]` runs a printing test twice on the
+firmware after `[F]irmware` (`--via-firmware`): with the printer switched off (`--hook off`), the
+printer port gets the reference; switched on, the RP's jobs, in order, must hold the same bytes,
+and each job's pages and PDF must be what `tools/printer/render` draws for those bytes on that
+paper (`--paper letter` puts the `PAPER` setting first). A job counts only once it has ended, so
+with the hook on a test's `printer` step becomes `jobbytes`, which waits until the hook has taken
+nothing for the same quiet time, its buffer is empty and the jobs hold every byte it took, and
+the run ends with `pagesdone`, once every job is rendered.
 
 The firmware deletes a job's file once its PDF is written, so the tests check a job's bytes
 through the size and MD5 the debug build logs as the job closes (`jobbytes`, `jobsame`), not
