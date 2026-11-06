@@ -17,7 +17,8 @@
 #                         FX-80 driver in C:\EASYDRAW\GEMSYS\)
 #   C:\XCONTROL.ACC       XControl, and C:\PRINTER.CPX where it looks for CPXs
 #   C:\ESCP, PRPATHS      our test programs (tools/dev/st)
-#   C:\PCL                PRFILES with our PCL streams (tools/printer/pclstreams.py)
+#   C:\PCL, PCLTEXT       PRFILES with our PCL streams (tools/printer/pclstreams.py):
+#                         raster and pages, then text and cursor moves
 #   C:\DESKPRT\PRINT.TXT  the desktop's Print
 #   C:\WORDPLUS, WORDPLFX 1st Word Plus, with its own and its Epson FX table
 #   C:\STWRITER, GFA, DEGAS, EASYDRAW, CALAMUS, SIGNUM3
@@ -79,6 +80,12 @@ python3 "$DEV/../printer/pclstreams.py" "$C/PCL"
 mv "$C/PCL/RASTER.PCL" "$C/PCL/TEXT.PRN"
 mv "$C/PCL/PAGES.PCL" "$C/PCL/GRAPH.PRN"
 rm "$C/PCL/MOVES.PCL"
+# And with our PCL text streams: the LaserJet's fonts and cursor.
+mkdir -p "$C/PCLTEXT"
+cp "$DEV/builds/st/PRFILES.PRG" "$C/PCLTEXT/"
+python3 "$DEV/../printer/pclstreams.py" "$WORK/pcltext"
+cp "$WORK/pcltext/TEXT.PCL" "$C/PCLTEXT/TEXT.PRN"
+cp "$WORK/pcltext/MOVES.PCL" "$C/PCLTEXT/GRAPH.PRN"
 
 # 1st Word Plus, with the table it ships with and with its Epson FX table.
 unpack "$P/1st_word_plus_2_02/files/1stWordPlus1.MSA" "$C/WORDPLUS"

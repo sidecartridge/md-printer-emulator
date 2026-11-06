@@ -25,6 +25,12 @@ C:\PCL           PRFILES.PRG again, with our PCL test streams as TEXT.PRN
                  MD5 2ae5138a9ddf6ca8b9e647f55abf9cb1; 8 pages at 300 dpi, PDF 68103 bytes
                  on A4, the first page drawn band by band
 
+C:\PCLTEXT       PRFILES.PRG again, with our PCL text streams as TEXT.PRN
+                 and GRAPH.PRN: the LaserJet's fonts, symbol sets, underline,
+                 wrap and cursor moves. Low resolution. Expected: 6234 bytes,
+                 MD5 29d7abd1584f8dc4199dd44f9e35a3b1; 3 pages at 300 dpi, PDF
+                 135943 bytes on A4
+
 C:\PRPATHS       PRPATHS.PRG: a key before each of its 5 print paths, a key
                  at the end. Path 5 is a screen dump of what is on screen,
                  so the job differs from the emulated one there.
