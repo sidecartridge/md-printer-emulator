@@ -22,6 +22,7 @@
 #include "display.h"
 #include "display_term.h"
 #include "emul.h"
+#include "ff.h"
 #include "memfunc.h"
 #include "pages.h"
 #include "pico/stdlib.h"
@@ -50,13 +51,11 @@
 #define ROW_MACHINE 20
 #define ROW_COMMANDS 22
 #define ROW_PROMPT 23
-#define ROW_ASK ROW_COMMANDS  // a value typed in: the question, the answer
 #define PROMPT "Select an option: "
 
 #define LABEL_WIDTH 13                       // "  [P]rinter    : "
 #define LINE_WIDTH (TERM_SCREEN_SIZE_X - 1)  // the last column wraps
 #define VALUE_WIDTH (LINE_WIDTH - 2 - LABEL_WIDTH - 2)
-#define TIMEOUT_MAX 255
 
 // The icons, from u8g2's open iconic embedded font, at the right of their
 // section's header row.
@@ -453,74 +452,210 @@ static void cmdPaper(const char *arg) {
   menu_show();
 }
 
-// Asks for a value under the settings; its answer comes back to the same
-// command (TERM_COMMAND_LEVEL_DATA_INPUT).
-static void ask(const char *question) {
-  row_text(ROW_ASK, question);
-  row_text(ROW_ASK + 1, "> ");
-  cursor(ROW_ASK + 1, 2);
-  term_setCommandLevel(TERM_COMMAND_LEVEL_DATA_INPUT);
-  display_refresh();
-}
+// The idle timeouts T steps through, in seconds.
+static const int timeouts[] = {5, 10, 20, 30, 60, 120};
+#define TIMEOUTS ((int)(sizeof(timeouts) / sizeof(timeouts[0])))
 
+// The next timeout of the list, after the first one, round again: a value
+// not on the list goes to the next one above it.
 static void cmdTimeout(const char *arg) {
+  (void)arg;
   halt(NULL);
-  if (arg == NULL) {
-    ask("Seconds of quiet that end a job, 1-255:");
-    return;
-  }
-  if (strcmp(arg, TERM_CANCEL) != 0) {
-    char *end = NULL;
-    long seconds = strtol(arg, &end, 10);
-    if (end == arg || *end != '\0' || seconds < 1 || seconds > TIMEOUT_MAX) {
-      notice = "The timeout is 1 to 255 seconds: not changed.";
-    } else {
-      settings_put_integer(aconfig_getContext(), ACONFIG_PARAM_IDLE_SECONDS,
-                           (int)seconds);
-      if (save()) printer_readSettings();
+  int now = atoi(setting(ACONFIG_PARAM_IDLE_SECONDS, "10"));
+  int next = timeouts[0];
+  for (int i = 0; i < TIMEOUTS; i++) {
+    if (timeouts[i] > now) {
+      next = timeouts[i];
+      break;
     }
   }
+  settings_put_integer(aconfig_getContext(), ACONFIG_PARAM_IDLE_SECONDS, next);
+  if (save()) printer_readSettings();
   menu_show();
 }
 
-// A folder's path: from the root, no part empty, none of FAT's forbidden
-// characters.
-static bool folder_ok(const char *path) {
-  size_t length = strlen(path);
-  if (length < 2 || length >= SETTINGS_MAX_VALUE_LENGTH || path[0] != '/' ||
-      path[length - 1] == '/' || strstr(path, "//") != NULL) {
-    return false;
+// ---- The folder picker ---------------------------------------------------
+// md-drives-emulator's chooser: the card's folders, one level at a time; the
+// cursor keys move, RETURN opens a folder, SPACE chooses the one shown, ESC
+// leaves. Its list is only in RAM while it is open.
+
+#define PICK_ENTRIES 64  // the folders listed at a level
+#define PICK_ROWS 16     // a page's
+#define PICK_TOP 3       // the list's first row
+#define PICK_NAME SETTINGS_MAX_VALUE_LENGTH
+
+typedef struct {
+  char path[PICK_NAME];                 // the folder shown
+  char names[PICK_ENTRIES][PICK_NAME];  // its folders, ".." first
+  uint16_t count;
+  uint16_t selected;
+  bool cut;  // more folders than PICK_ENTRIES
+} Picker;
+
+static Picker *picker;
+
+static int by_name(const void *a, const void *b) {
+  return strcasecmp((const char *)a, (const char *)b);
+}
+
+// The folders in picker->path, in the order of their names.
+static bool pick_load(void) {
+  picker->count = 0;
+  picker->selected = 0;
+  picker->cut = false;
+  if (strcmp(picker->path, "/") != 0) {
+    snprintf(picker->names[picker->count++], PICK_NAME, "..");
   }
-  for (const char *c = path; *c; c++) {
-    if (*c < ' ' || strchr("\\:*?\"<>|", *c) != NULL) return false;
+  uint16_t first = picker->count;
+  DIR dir;
+  FILINFO info;
+  if (f_opendir(&dir, picker->path) != FR_OK) return false;
+  while (f_readdir(&dir, &info) == FR_OK && info.fname[0] != '\0') {
+    if (!(info.fattrib & AM_DIR) || info.fname[0] == '.') continue;
+    if (picker->count == PICK_ENTRIES) {
+      picker->cut = true;
+      break;
+    }
+    snprintf(picker->names[picker->count++], PICK_NAME, "%s", info.fname);
   }
+  f_closedir(&dir);
+  qsort(picker->names[first], picker->count - first, PICK_NAME, by_name);
   return true;
+}
+
+static void pick_draw(void) {
+  char line[TERM_SCREEN_SIZE_X];
+  char where[TERM_SCREEN_SIZE_X];
+  menu_title();
+  tail(where, LINE_WIDTH - 9 + 1, picker->path);
+  snprintf(line, sizeof(line), "Folder: %s", where);
+  row_text(1, line);
+  uint16_t page = picker->selected / PICK_ROWS;
+  for (uint16_t k = 0; k < PICK_ROWS; k++) {
+    uint16_t i = (uint16_t)(page * PICK_ROWS + k);
+    if (i >= picker->count) break;
+    snprintf(line, sizeof(line), "%c %s%s", i == picker->selected ? '>' : ' ',
+             picker->names[i], strcmp(picker->names[i], "..") == 0 ? "" : "/");
+    row_text((uint8_t)(PICK_TOP + k), line);
+  }
+  uint16_t pages = (uint16_t)((picker->count + PICK_ROWS - 1) / PICK_ROWS);
+  snprintf(line, sizeof(line), "Page %u/%u%s", (unsigned)page + 1,
+           (unsigned)(pages ? pages : 1),
+           picker->cut ? ", more folders not shown" : "");
+  row_text(PICK_TOP + PICK_ROWS + 1, line);
+  row_text(ROW_COMMANDS, "Cursor keys move, RETURN opens a folder");
+  row_text(ROW_PROMPT, "SPACE chooses it, ESC goes back");
+  draw_strip(notice != NULL ? notice : "The folder the printer's PDFs go to.");
+  notice = NULL;
+  display_refresh();
+}
+
+static void pick_close(void) {
+  free(picker);
+  picker = NULL;
+  term_setCommandLevel(TERM_COMMAND_LEVEL_SINGLE_KEY);
+}
+
+// Into the folder selected, or up for "..".
+static void pick_open(void) {
+  if (picker->count == 0) return;
+  const char *name = picker->names[picker->selected];
+  if (strcmp(name, "..") == 0) {
+    char *slash = strrchr(picker->path, '/');
+    if (slash == picker->path) {
+      picker->path[1] = '\0';
+    } else if (slash != NULL) {
+      *slash = '\0';
+    }
+  } else {
+    size_t length = strlen(picker->path);
+    if (length + 1 + strlen(name) >= PICK_NAME) {
+      notice = "That folder's path is too long for the setting.";
+      return;
+    }
+    snprintf(picker->path + length, PICK_NAME - length, "%s%s",
+             length > 1 ? "/" : "", name);
+  }
+  if (!pick_load()) notice = "The card could not list that folder.";
+}
+
+// The folder chosen: stored, and the jobs and the drive follow it.
+static void use_folder(const char *path) {
+  if (strcmp(path, "/") == 0) {
+    notice = "Choose a folder, not the card's root.";
+  } else if (printer_receiving() != 0 || pages_busy()) {
+    notice = "A job is still printing: try again when it ends.";
+  } else {
+    settings_put_string(aconfig_getContext(), ACONFIG_PARAM_FOLDER, path);
+    if (save()) {
+      printer_readSettings();
+      pages_init();
+      usbvol_folderChanged();
+    }
+  }
 }
 
 static void cmdFolder(const char *arg) {
   halt(NULL);
   if (arg == NULL) {
-    ask("The folder for the PDFs, from /:");
-    return;
-  }
-  if (strcmp(arg, TERM_CANCEL) != 0) {
-    if (!folder_ok(arg)) {
-      notice = "Not a folder's path (/PRINTER, say): not changed.";
-    } else if (printer_receiving() != 0 || pages_busy()) {
-      notice = "A job is still printing: try again when it ends.";
-    } else {
-      settings_put_string(aconfig_getContext(), ACONFIG_PARAM_FOLDER, arg);
-      if (save()) {
-        // The jobs and the drive from the new folder on, made if it is not
-        // there yet.
-        printer_readSettings();
-        sdcard_ensureFolder(arg);
-        pages_init();
-        usbvol_folderChanged();
+    picker = calloc(1, sizeof(Picker));
+    if (picker == NULL) {
+      notice = "Not enough RAM for the folder picker.";
+      menu_show();
+      return;
+    }
+    // From the folder in use, or the root if it is not there.
+    snprintf(picker->path, PICK_NAME, "%s",
+             setting(ACONFIG_PARAM_FOLDER, PRINTER_FOLDER));
+    if (!pick_load()) {
+      snprintf(picker->path, PICK_NAME, "/");
+      if (!pick_load()) {
+        pick_close();
+        notice = "The card could not list its folders.";
+        menu_show();
+        return;
       }
     }
+    term_setCommandLevel(TERM_COMMAND_LEVEL_SINGLE_KEY_REENTRY);
+    pick_draw();
+    return;
   }
-  menu_show();
+  uint16_t pageStart = (uint16_t)(picker->selected / PICK_ROWS * PICK_ROWS);
+  switch (arg[0]) {
+    case TERM_KEYBOARD_KEY_UP:
+      if (picker->selected > 0) picker->selected--;
+      break;
+    case TERM_KEYBOARD_KEY_DOWN:
+      if (picker->selected + 1 < picker->count) picker->selected++;
+      break;
+    case TERM_KEYBOARD_KEY_LEFT:
+      picker->selected = pageStart >= PICK_ROWS ? pageStart - PICK_ROWS : 0;
+      break;
+    case TERM_KEYBOARD_KEY_RIGHT:
+      if (pageStart + PICK_ROWS < picker->count) {
+        picker->selected = (uint16_t)(pageStart + PICK_ROWS);
+      }
+      break;
+    case '\r':
+    case '\n':
+      pick_open();
+      break;
+    case ' ': {
+      char chosen[PICK_NAME];
+      snprintf(chosen, sizeof(chosen), "%s", picker->path);
+      pick_close();
+      use_folder(chosen);
+      menu_show();
+      return;
+    }
+    case TERM_ESC_CHAR:
+      pick_close();
+      menu_show();
+      return;
+    default:
+      return;
+  }
+  pick_draw();
 }
 
 static void cmdExit(const char *arg) {

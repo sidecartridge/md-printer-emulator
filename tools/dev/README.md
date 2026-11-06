@@ -167,7 +167,7 @@ probe until it ends: to look at the device during a press, put the reads in that
 acknowledge it. `key` and `inject` queue a protocol command as if the ST had sent it, through
 `chandler_injectProtocol()`, so the firmware handles it through its normal path: the same
 callbacks, the same answer. The setup menu takes one key a command
-(`swd.py key t` asks the menu's timeout question, `swd.py key $'\x1b'` puts it away). `app NAME` runs the app command defined as
+(`swd.py key o` opens the menu's folder picker, `swd.py key $'\x1b'` closes it). `app NAME` runs the app command defined as
 `DEVHOOKS_APP_<NAME>` in `rp/src/include/emul.h`, handled by `emul_devhooksApp()`:
 
 - `heap_hold KB`: hold KB more kilobytes of heap, on top of what is already held (`heap_hold 0`

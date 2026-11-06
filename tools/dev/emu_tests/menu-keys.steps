@@ -1,10 +1,13 @@
 # The setup menu's keys, one each, as a user presses them: [P] toggles the
-# printer and [A] the paper, each shown at once; [T] takes the idle timeout
-# typed in (30), and refuses one out of range (999); [O] takes a new folder
-# (/JOBS); [E] starts the printer. A job printed then (our ESC/P pages, sent
-# by PRFILES) lands in the new folder as a PDF, the one tools/printer/render
-# writes for it, the folder made at the job.
+# printer and [A] the paper, each shown at once; [T] steps through the idle
+# timeouts, 10 to 20, 30, 60, 120 and round to 5 s, which the job then ends
+# after; [O] opens the folder picker, in /PRINTER: RETURN on ".." goes up to
+# the card's root, the cursor keys move between its folders, RETURN opens
+# /JOBS and SPACE chooses it; [E] starts the printer. A job printed then (our
+# ESC/P pages, sent by PRFILES) lands in the new folder as a PDF, the one
+# tools/printer/render writes.
 @disk-a tools/dev/builds/disks/escp.st
+cardput JOBS/KEEP
 text "Machine +: (ST|STE|Mega STE), TOS" 1500
 key p
 text "\[P\]rinter +: HP LaserJet II" 300
@@ -15,18 +18,27 @@ text "P\[a\]per +: Letter" 300
 key a
 text "P\[a\]per +: A4" 300
 key t
-text "Seconds of quiet that end a job" 300
-type 30
-key 0x1c
+text "\[T\]imeout +: 20 s" 300
+key t
 text "\[T\]imeout +: 30 s" 300
 key t
-type 999
-key 0x1c
-text "\[T\]imeout +: 30 s" 300
+text "\[T\]imeout +: 60 s" 300
+key t
+text "\[T\]imeout +: 120 s" 300
+key t
+text "\[T\]imeout +: 5 s" 300
 key o
-text "The folder for the PDFs" 300
-type /JOBS
+text "Folder: /PRINTER" 300
+text "> \.\." 100
 key 0x1c
+text "> JOBS/" 300
+key 0x50
+text "> PRINTER/" 100
+key 0x48
+text "> JOBS/" 100
+key 0x1c
+text "Folder: /JOBS" 300
+key 0x39
 text "F\[o\]lder +: /JOBS" 300
 key e
 text "Starting the printer" 300

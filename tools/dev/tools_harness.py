@@ -84,7 +84,7 @@ def keys(s, pause=0.4):
 
 
 def to_menu():
-    keys("\x1b")  # ESC: a question asked by the menu is put away
+    keys("\x1b")  # ESC: the folder picker, if open, is closed
     time.sleep(1.0)
     return "Select an option" in text()
 
@@ -160,17 +160,18 @@ def device_checks(do_reset):
 
     print("mailbox: key, inject, app")
     cur = LogCursor()
-    keys("t")
+    keys("o")
     time.sleep(0.8)
-    check("key: 't' asks for the timeout", "Seconds of quiet" in text())
-    check("key: the firmware logged the keystroke", cur.wait(r"Keystroke: t\."))
-    check("key: ESC puts the question away", to_menu())
+    check("key: 'o' opens the folder picker", "Folder: " in text())
+    check("key: the firmware logged the keystroke", cur.wait(r"Keystroke: o\."))
+    check("key: ESC closes it", to_menu())
     cur = LogCursor()
-    rc, out = swdpy("inject", "0x0001", "0x0074", "0")
+    rc, out = swdpy("inject", "0x0001", "0x006F", "0")
     time.sleep(0.8)
     check("inject: raw keystroke frames reach the terminal",
           rc == 0 and cur.wait(r"Injected command 0001") and
-          "Seconds of quiet" in text())
+          "Folder: " in text())
+    to_menu()
     to_menu()
     before = heap_in_use_kb()
     rc, out = swdpy("app", "heap_hold", "16")

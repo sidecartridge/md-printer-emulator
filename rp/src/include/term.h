@@ -78,11 +78,19 @@
 enum {
   TERM_COMMAND_LEVEL_SINGLE_KEY = 0,     // a key runs its one-letter command
   TERM_COMMAND_LEVEL_COMMAND_INPUT = 1,  // a line, run as a command at Return
-  TERM_COMMAND_LEVEL_DATA_INPUT = 2,     // a value, given at Return to the
-                                         // command whose key asked for it
+  TERM_COMMAND_LEVEL_SINGLE_KEY_REENTRY = 2,  // each key to the command
+                                              // whose key asked for them
 };
-#define TERM_CANCEL "\x1B"  // the value a command gets when ESC is pressed
 
+// The ST's cursor keys, by scan code, and the codes a command gets for them.
+#define TERM_KEYBOARD_SCAN_CODE_UP 72
+#define TERM_KEYBOARD_SCAN_CODE_DOWN 80
+#define TERM_KEYBOARD_SCAN_CODE_LEFT 75
+#define TERM_KEYBOARD_SCAN_CODE_RIGHT 77
+#define TERM_KEYBOARD_KEY_UP 16
+#define TERM_KEYBOARD_KEY_DOWN 14
+#define TERM_KEYBOARD_KEY_LEFT 2
+#define TERM_KEYBOARD_KEY_RIGHT 6
 // Command lookup structure, now with argument support
 typedef struct {
   const char *command;

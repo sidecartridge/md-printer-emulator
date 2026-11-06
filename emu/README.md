@@ -71,7 +71,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | --- | --- |
 | `template-menu` | the setup menu appears; the ST's hello, machine and TOS arrive |
 | `template-firmware` | `[E]` starts the printer: the ST runs the user firmware |
-| `menu-keys` | the setup menu's keys: `P` and `A` toggle the printer and the paper, `T` and `O` take the timeout and the folder typed in (a value out of range refused), `E` starts the printer, and a job lands in the new folder |
+| `menu-keys` | the setup menu's keys: `P` and `A` toggle the printer and the paper, `T` steps through the timeouts (round again after 120 s), `O` opens the folder picker (up to the root, the cursor keys, into a folder, SPACE chooses it), `E` starts the printer, and a job lands in the new folder |
 | `menu-countdown` | untouched, the menu's countdown starts the printer by itself |
 | `menu-halt` | a key stops the countdown: the menu stays |
 | `template-reset` | warm resets: the menu again, then the user firmware once per reset |

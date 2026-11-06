@@ -120,7 +120,7 @@ static size_t inputLength = 0;
 
 // How a key is taken (term.h): a command of its own, a line, or a value.
 static uint8_t commandLevel = TERM_COMMAND_LEVEL_COMMAND_INPUT;
-static char lastSingleKeyCommand = 0;  // the command a value is typed for
+static char lastSingleKeyCommand = 0;  // the command keys go back to
 static bool anyKeyPressed = false;     // since term_consumeAnyKeyPressed
 
 void term_setCommandLevel(uint8_t level) { commandLevel = level; }
@@ -386,16 +386,11 @@ static void termInputChar(char chr) {
     display_termRefresh();
     return;
   }
-  if (commandLevel == TERM_COMMAND_LEVEL_DATA_INPUT &&
-      (chr == '\n' || chr == '\r' || chr == TERM_ESC_CHAR)) {
-    // The value typed goes to the command that asked for it; ESC gives it
-    // TERM_CANCEL instead.
+  if (commandLevel == TERM_COMMAND_LEVEL_SINGLE_KEY_REENTRY) {
+    // Each key, the cursor keys too, to the command that asked for them.
     void (*handler)(const char *) = single_key_handler(lastSingleKeyCommand);
-    static char value[TERM_INPUT_BUFFER_SIZE];
-    snprintf(value, sizeof(value), "%s",
-             chr == TERM_ESC_CHAR ? TERM_CANCEL : inputBuffer);
-    term_clearInputBuffer();
-    if (handler != NULL) handler(value);
+    char key[2] = {chr, '\0'};
+    if (handler != NULL) handler(key);
     display_termRefresh();
     return;
   }
@@ -617,6 +612,23 @@ void __not_in_flash_func(term_loop)() {
           // Print the keystroke and the shift key status
           DPRINTF("Keystroke: %d. Shift key: %d, Scan code: %d\n", keystroke,
                   shiftKey, scanCode);
+        }
+        // The cursor keys, which have no character, by their scan codes.
+        switch (scanCode) {
+          case TERM_KEYBOARD_SCAN_CODE_UP:
+            keystroke = TERM_KEYBOARD_KEY_UP;
+            break;
+          case TERM_KEYBOARD_SCAN_CODE_DOWN:
+            keystroke = TERM_KEYBOARD_KEY_DOWN;
+            break;
+          case TERM_KEYBOARD_SCAN_CODE_LEFT:
+            keystroke = TERM_KEYBOARD_KEY_LEFT;
+            break;
+          case TERM_KEYBOARD_SCAN_CODE_RIGHT:
+            keystroke = TERM_KEYBOARD_KEY_RIGHT;
+            break;
+          default:
+            break;
         }
         termInputChar(keystroke);
         break;
