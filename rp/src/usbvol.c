@@ -168,6 +168,15 @@ void usbvol_loop(void) {
   }
 }
 
+void usbvol_folderChanged(void) {
+  if (!started) return;
+  list_folder();
+  changes++;
+  vol.serial = USBVOL_SERIAL + changes;
+  medium = MEDIUM_REMOVED;
+  removedUntil = make_timeout_time_ms(USBVOL_REMOVED_MS);
+}
+
 bool usbvol_mounted(void) { return mounted && !ejected; }
 
 const UsbvolCounters *usbvol_getCounters(void) { return &counters; }

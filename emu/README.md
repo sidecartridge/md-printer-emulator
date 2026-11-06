@@ -39,7 +39,7 @@ tools/dev/mdfw.sh run --no-user-config --tos emu/tos/tos162uk.img --machine ste
 `tools/dev/mdfw.sh` is emumd's `mdfw` with this repository's cache.
 `mdfw.ini` (at the root) builds everything in `rp/src` but the hardware layer
 emumd stands in for (the bus, SELECT, the SD card driver), and this folder.
-In the setup menu, `f` then Return launches the user firmware.
+In the setup menu, `e` starts the printer (the user firmware); untouched, its countdown does after 20 seconds.
 
 What building `rp/src` for a 64-bit host needed, in the firmware's own sources
 and without changing the device's build (its flash image is byte-identical):
@@ -70,7 +70,10 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | Test | What it checks |
 | --- | --- |
 | `template-menu` | the setup menu appears; the ST's hello, machine and TOS arrive |
-| `template-firmware` | `[F]irmware` runs the user firmware's demo |
+| `template-firmware` | `[E]` starts the printer: the ST runs the user firmware |
+| `menu-keys` | the setup menu's keys: `P` and `A` toggle the printer and the paper, `T` and `O` take the timeout and the folder typed in (a value out of range refused), `E` starts the printer, and a job lands in the new folder |
+| `menu-countdown` | untouched, the menu's countdown starts the printer by itself |
+| `menu-halt` | a key stops the countdown: the menu stays |
 | `template-reset` | warm resets: the menu again, then the user firmware once per reset |
 | `template-coldreset` | a cold reset power-cycles the Multi-device: the menu again |
 | `floppy-auto` | a floppy's `AUTO` program runs after the cartridge, then the desktop |
@@ -92,7 +95,7 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 | `impossible` | must FAIL: the harness can fail |
 
 `tools/dev/hook_fidelity.sh TEST SETUP [--paper letter]` runs a printing test twice on the
-firmware after `[F]irmware` (`--via-firmware`): with the printer switched off (`--hook off`), the
+firmware after the menu's `[E]` (`--via-firmware`): with the printer switched off (`--hook off`), the
 printer port gets the reference; switched on, the RP's jobs, in order, must hold the same bytes,
 and each job's pages and PDF must be what `tools/printer/render` draws for those bytes on that
 paper (`--paper letter` puts the `PAPER` setting first). A job counts only once it has ended, so

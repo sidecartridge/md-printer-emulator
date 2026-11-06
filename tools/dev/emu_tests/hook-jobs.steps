@@ -6,9 +6,8 @@
 # equals the two pages byte for byte (the size and MD5 the RP logs as it
 # closes it).
 @disk-a tools/dev/builds/disks/escp.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900
@@ -26,17 +25,10 @@ jobsame 2 tools/dev/builds/disks/escp-expected.prn
 reset cold
 newlog "Cartridge image in RAM verified" 1500
 newlog "Setting shared variable 1 to" 1500
-text "Atari +: (ST|STE|Mega STE), TOS" 500
-key s
-key 0x1c
-type print
-key 0x1c
-text "NEXT_JOB .INT.: 3" 300
-key m
-key 0x1c
-text "Atari +: (ST|STE|Mega STE), TOS" 300
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 500
+text "Next job +: 00000003" 300
+text "Machine +: (ST|STE|Mega STE), TOS" 300
+key e
 wait 100
 key 0x01
 wait 900

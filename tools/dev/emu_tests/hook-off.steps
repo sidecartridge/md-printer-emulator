@@ -3,10 +3,9 @@
 # reaches the printer port as without the cartridge; the hook takes nothing.
 @printer
 @disk-a tools/dev/builds/disks/prpaths.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
 svar 2 0
-key f
-key 0x1c
+key e
 wait 100
 key 0x01
 wait 900

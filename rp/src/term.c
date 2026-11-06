@@ -41,9 +41,6 @@ static uint8_t protocolWriteIndex = 1;
 static bool protocolBufferReady = false;
 static uint32_t protocolOverwriteCount = 0;
 
-#define TERM_MENU_INFO_VALUE_SIZE 64
-#define TERM_MENU_LIVE_LINE_MAX 128
-
 // Command handlers
 static void cmdClear(const char *arg);
 static void cmdExit(const char *arg);
@@ -113,13 +110,6 @@ static char screen[TERM_SCREEN_SIZE];
 static uint8_t cursorX = 0;
 static uint8_t cursorY = 0;
 
-static uint8_t menuRowSelect = 0;
-static uint8_t menuRowSd = 0;
-static uint8_t menuPromptRow = 0;
-static uint8_t menuPromptCol = 0;
-static bool menuRowsValid = false;
-static bool menuPromptValid = false;
-
 // Store previous cursor position for block removal
 static uint8_t prevCursorX = 0;
 static uint8_t prevCursorY = 0;
@@ -128,16 +118,36 @@ static uint8_t prevCursorY = 0;
 static char inputBuffer[TERM_INPUT_BUFFER_SIZE];
 static size_t inputLength = 0;
 
-// Getter method for inputBuffer
-char *term_getInputBuffer(void) { return inputBuffer; }
+// How a key is taken (term.h): a command of its own, a line, or a value.
+static uint8_t commandLevel = TERM_COMMAND_LEVEL_COMMAND_INPUT;
+static char lastSingleKeyCommand = 0;  // the command a value is typed for
+static bool anyKeyPressed = false;     // since term_consumeAnyKeyPressed
+
+void term_setCommandLevel(uint8_t level) { commandLevel = level; }
+
+uint8_t term_getCommandLevel(void) { return commandLevel; }
+
+bool term_consumeAnyKeyPressed(void) {
+  bool pressed = anyKeyPressed;
+  anyKeyPressed = false;
+  return pressed;
+}
+
+// The handler of a one-letter command, or NULL.
+static void (*single_key_handler(char key))(const char *) {
+  for (size_t i = 0; i < numCommands; i++) {
+    if (commands[i].command[0] == key && commands[i].command[1] == '\0') {
+      return commands[i].handler;
+    }
+  }
+  return NULL;
+}
 
 // Clears entire screen buffer and resets cursor
 void term_clearScreen(void) {
   memset(screen, 0, TERM_SCREEN_SIZE);
   cursorX = 0;
   cursorY = 0;
-  menuRowsValid = false;
-  menuPromptValid = false;
   display_termClear();
 }
 
@@ -280,6 +290,14 @@ static void vt52ProcessSequence(const char *seq, size_t length) {
         display_termChar(posX, cursorY, ' ');
       }
       break;
+    case 'p':  // Reverse video: the row's background, then dark text
+      u8g2_DrawBox(display_getU8g2Ref(), 0, cursorY * DISPLAY_TERM_CHAR_HEIGHT,
+                   DISPLAY_WIDTH, DISPLAY_TERM_CHAR_HEIGHT);
+      u8g2_SetDrawColor(display_getU8g2Ref(), 0);
+      break;
+    case 'q':  // Normal video
+      u8g2_SetDrawColor(display_getU8g2Ref(), 1);
+      break;
     case 'Y':  // Direct cursor addressing: ESC Y <row> <col>
       if (length == 4) {
         int row = seq[2] - TERM_POS_Y;
@@ -355,6 +373,32 @@ void term_printString(const char *str) {
 // Called whenever a character is entered by the user
 // This is the single point of entry for user input
 static void termInputChar(char chr) {
+  anyKeyPressed = true;
+  if (commandLevel == TERM_COMMAND_LEVEL_SINGLE_KEY) {
+    // A key is a command: the menu's letters, either case.
+    void (*handler)(const char *) =
+        single_key_handler((char)tolower((unsigned char)chr));
+    if (handler != NULL) {
+      lastSingleKeyCommand = (char)tolower((unsigned char)chr);
+      handler(NULL);
+    }
+    term_clearInputBuffer();
+    display_termRefresh();
+    return;
+  }
+  if (commandLevel == TERM_COMMAND_LEVEL_DATA_INPUT &&
+      (chr == '\n' || chr == '\r' || chr == TERM_ESC_CHAR)) {
+    // The value typed goes to the command that asked for it; ESC gives it
+    // TERM_CANCEL instead.
+    void (*handler)(const char *) = single_key_handler(lastSingleKeyCommand);
+    static char value[TERM_INPUT_BUFFER_SIZE];
+    snprintf(value, sizeof(value), "%s",
+             chr == TERM_ESC_CHAR ? TERM_CANCEL : inputBuffer);
+    term_clearInputBuffer();
+    if (handler != NULL) handler(value);
+    display_termRefresh();
+    return;
+  }
   // Check for backspace
   if (chr == '\b') {
     display_termChar(prevCursorX, prevCursorY, ' ');
@@ -420,13 +464,7 @@ static void termInputChar(char chr) {
     memset(inputBuffer, 0, TERM_INPUT_BUFFER_SIZE);
     inputLength = 0;
 
-    // A command that drew the menu left its own "Select an option:" prompt,
-    // with the cursor on it: a "> " after it would read as a second prompt.
-    bool atMenuPrompt = menuPromptValid && (cursorY == menuPromptRow) &&
-                        (cursorX == menuPromptCol);
-    if (!atMenuPrompt) {
-      term_printString("> ");
-    }
+    term_printString("> ");
     display_termRefresh();
     return;
   }
@@ -593,299 +631,6 @@ void __not_in_flash_func(term_loop)() {
   }
 }
 
-// Command handlers
-// Print one line of the menu, cut to fit: the terminal wraps as soon as its
-// last column is written, so a line of TERM_SCREEN_SIZE_X characters would
-// leave a blank row after it, and a longer one would push the menu down.
-static void termPrintMenuLine(const char *fmt, ...) {
-  char line[TERM_SCREEN_SIZE_X];
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(line, sizeof(line), fmt, args);  // at most SIZE_X - 1 characters
-  va_end(args);
-  term_printString(line);
-  term_printString("\n");
-}
-
-static bool term_buildLiveMenuLines(char *selectLine, size_t selectLineSize,
-                                    char *sdLine, size_t sdLineSize);
-
-void term_printDeviceInfo(void) {
-  // Static, not on the stack, like the live lines'.
-  static char boardId[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
-  static char selectLine[TERM_MENU_LIVE_LINE_MAX];
-  static char sdLine[TERM_MENU_LIVE_LINE_MAX];
-
-  pico_get_unique_board_id_string(boardId, sizeof(boardId));
-  term_buildLiveMenuLines(selectLine, sizeof(selectLine), sdLine,
-                          sizeof(sdLine));
-
-  menuRowsValid = false;
-
-#if PICO_RP2350
-  termPrintMenuLine("MCU type  : RP2350 (%s)", boardId);
-#else
-  termPrintMenuLine("MCU type  : RP2040 (%s)", boardId);
-#endif
-
-  term_printString("\n");
-  menuRowSelect = cursorY;
-  termPrintMenuLine("%s", selectLine);
-
-  term_printString("\n");
-  menuRowSd = cursorY;
-  termPrintMenuLine("%s", sdLine);
-
-  menuRowsValid = true;
-}
-
-void term_markMenuPromptCursor(void) {
-  menuPromptRow = cursorY;
-  menuPromptCol = cursorX;
-  menuPromptValid = true;
-}
-
-static void term_appendMoveAndClearLine(char *buffer, size_t bufferSize,
-                                        size_t *offset, uint8_t row) {
-  if ((buffer == NULL) || (offset == NULL) || (*offset >= bufferSize)) {
-    return;
-  }
-
-  size_t remaining = bufferSize - *offset;
-  int written = snprintf(buffer + *offset, remaining,
-                         "\x1B"
-                         "Y%c%c\x1B"
-                         "K",
-                         (char)(TERM_POS_Y + row), (char)(TERM_POS_X));
-  if (written < 0) {
-    return;
-  }
-
-  size_t writeSize = (size_t)written;
-  if (writeSize >= remaining) {
-    *offset = bufferSize - 1;
-    return;
-  }
-
-  *offset += writeSize;
-}
-
-static void term_appendText(char *buffer, size_t bufferSize, size_t *offset,
-                            const char *text) {
-  if ((buffer == NULL) || (offset == NULL) || (text == NULL) ||
-      (*offset >= bufferSize)) {
-    return;
-  }
-
-  size_t remaining = bufferSize - *offset;
-  int written = snprintf(buffer + *offset, remaining, "%s", text);
-  if (written < 0) {
-    return;
-  }
-
-  size_t writeSize = (size_t)written;
-  if (writeSize >= remaining) {
-    *offset = bufferSize - 1;
-    return;
-  }
-
-  *offset += writeSize;
-}
-
-static bool term_buildLiveMenuLines(char *selectLine, size_t selectLineSize,
-                                    char *sdLine, size_t sdLineSize) {
-  if ((selectLine == NULL) || (sdLine == NULL) || (selectLineSize == 0) ||
-      (sdLineSize == 0)) {
-    return false;
-  }
-
-  // Static, not on the stack, like the menu's own values; each one is
-  // written below before it is read.
-  static char selectState[TERM_MENU_INFO_VALUE_SIZE];
-  static char sdStatus[TERM_MENU_INFO_VALUE_SIZE];
-  static char sdSpace[TERM_MENU_INFO_VALUE_SIZE];
-
-  snprintf(selectState, sizeof(selectState), "%s",
-           select_detectPush() ? "Pressed" : "Released");
-  snprintf(sdStatus, sizeof(sdStatus), "Not mounted");
-  snprintf(sdSpace, sizeof(sdSpace), "N/A");
-
-  uint32_t sdTotalMb = 0;
-  uint32_t sdFreeMb = 0;
-  if (sdcard_getMountedInfo(&sdTotalMb, &sdFreeMb)) {
-    snprintf(sdStatus, sizeof(sdStatus), "Mounted");
-    snprintf(sdSpace, sizeof(sdSpace), "%lu/%lu MB", (unsigned long)sdFreeMb,
-             (unsigned long)sdTotalMb);
-  } else if (sdcard_isMounted()) {
-    snprintf(sdStatus, sizeof(sdStatus), "Error");
-  }
-
-  // Cut like termPrintMenuLine, so the refresh never wraps either.
-  size_t maxLine = TERM_SCREEN_SIZE_X;
-  snprintf(selectLine, selectLineSize < maxLine ? selectLineSize : maxLine,
-           "SELECT    : %s", selectState);
-  snprintf(sdLine, sdLineSize < maxLine ? sdLineSize : maxLine,
-           "SD card   : %s (%s)", sdStatus, sdSpace);
-
-  return true;
-}
-
-void term_refreshMenuLiveInfo(void) {
-  static char prevSelectLine[TERM_MENU_LIVE_LINE_MAX] = {0};
-  static char prevSdLine[TERM_MENU_LIVE_LINE_MAX] = {0};
-
-  // Static, not on the stack: the two lines are written in full before they
-  // are read, and the update is built from offset 0 with snprintf, which
-  // terminates it.
-  static char selectLine[TERM_MENU_LIVE_LINE_MAX];
-  static char sdLine[TERM_MENU_LIVE_LINE_MAX];
-
-  if (!menuRowsValid ||
-      !term_buildLiveMenuLines(selectLine, sizeof(selectLine), sdLine,
-                               sizeof(sdLine))) {
-    return;
-  }
-
-  bool updateSelect = (strcmp(selectLine, prevSelectLine) != 0);
-  bool updateSd = (strcmp(sdLine, prevSdLine) != 0);
-
-  if (!updateSelect && !updateSd) {
-    return;
-  }
-
-  static char updateBuffer[512];
-  size_t offset = 0;
-
-  if (updateSelect) {
-    term_appendMoveAndClearLine(updateBuffer, sizeof(updateBuffer), &offset,
-                                menuRowSelect);
-    term_appendText(updateBuffer, sizeof(updateBuffer), &offset, selectLine);
-  }
-
-  if (updateSd) {
-    term_appendMoveAndClearLine(updateBuffer, sizeof(updateBuffer), &offset,
-                                menuRowSd);
-    term_appendText(updateBuffer, sizeof(updateBuffer), &offset, sdLine);
-  }
-
-  // Restore the cursor to the menu prompt input position.
-  if (menuPromptValid && (offset < sizeof(updateBuffer))) {
-    size_t remaining = sizeof(updateBuffer) - offset;
-    int written = snprintf(updateBuffer + offset, remaining,
-                           "\x1B"
-                           "Y%c%c",
-                           (char)(TERM_POS_Y + menuPromptRow),
-                           (char)(TERM_POS_X + menuPromptCol));
-    if (written > 0) {
-      size_t writeSize = (size_t)written;
-      if (writeSize >= remaining) {
-        offset = sizeof(updateBuffer) - 1;
-      } else {
-        offset += writeSize;
-      }
-    }
-  }
-
-  snprintf(prevSelectLine, sizeof(prevSelectLine), "%s", selectLine);
-  snprintf(prevSdLine, sizeof(prevSdLine), "%s", sdLine);
-
-  term_printString(updateBuffer);
-}
-
-static bool term_parseKeyAndTail(const char *arg, char *key, size_t keySize,
-                                 const char **tail) {
-  if ((arg == NULL) || (key == NULL) || (keySize == 0)) {
-    return false;
-  }
-
-  while (isspace((unsigned char)*arg)) {
-    arg++;
-  }
-  if (*arg == '\0') {
-    return false;
-  }
-
-  const char *end = arg;
-  while ((*end != '\0') && !isspace((unsigned char)*end)) {
-    end++;
-  }
-
-  size_t keyLen = (size_t)(end - arg);
-  if ((keyLen == 0) || (keyLen >= keySize)) {
-    return false;
-  }
-
-  memcpy(key, arg, keyLen);
-  key[keyLen] = '\0';
-
-  while (isspace((unsigned char)*end)) {
-    end++;
-  }
-
-  if (tail != NULL) {
-    *tail = end;
-  }
-  return true;
-}
-
-static bool term_parseBoolToken(const char *valueToken, bool *value) {
-  if ((valueToken == NULL) || (value == NULL)) {
-    return false;
-  }
-
-  char valueStr[TERM_BOOL_INPUT_BUFF] = {0};
-  size_t valueLen = strcspn(valueToken, " \t\r\n");
-  if ((valueLen == 0) || (valueLen >= sizeof(valueStr))) {
-    return false;
-  }
-  memcpy(valueStr, valueToken, valueLen);
-  valueStr[valueLen] = '\0';
-
-  for (size_t i = 0; valueStr[i] != '\0'; i++) {
-    valueStr[i] = (char)tolower((unsigned char)valueStr[i]);
-  }
-
-  if ((strcmp(valueStr, "true") == 0) || (strcmp(valueStr, "t") == 0) ||
-      (strcmp(valueStr, "1") == 0)) {
-    *value = true;
-    return true;
-  }
-  if ((strcmp(valueStr, "false") == 0) || (strcmp(valueStr, "f") == 0) ||
-      (strcmp(valueStr, "0") == 0)) {
-    *value = false;
-    return true;
-  }
-
-  return false;
-}
-
-// Command handlers
-void term_cmdSettings(const char *arg) {
-  term_printString(
-      "\x1B"
-      "E"
-      "Available settings commands:\n");
-  term_printString("  print   - Show settings\n");
-  term_printString("  save    - Save settings\n");
-  term_printString("  erase   - Erase settings\n");
-  term_printString("  get     - Get setting (requires key)\n");
-  term_printString("  put_int - Set integer (key and value)\n");
-  term_printString("  put_bool- Set boolean (key and value)\n");
-  term_printString("  put_str - Set string (key and value)\n");
-  term_printString("\nEnter 'm' to return to the main menu.\n\n");
-}
-
-void term_cmdPrint(const char *arg) {
-  char *buffer = (char *)malloc(TERM_PRINT_SETTINGS_BUFFER_SIZE);
-  if (buffer == NULL) {
-    term_printString("Error: Out of memory.\n");
-    return;
-  }
-  settings_print(aconfig_getContext(), buffer);
-  term_printString(buffer);
-  free(buffer);
-}
-
 void term_cmdClear(const char *arg) { term_clearScreen(); }
 
 void term_cmdExit(const char *arg) {
@@ -896,117 +641,4 @@ void term_cmdExit(const char *arg) {
 
 void term_cmdUnknown(const char *arg) {
   TPRINTF("Unknown command. Type 'help' for a list of commands.\n");
-}
-
-void term_cmdSave(const char *arg) {
-  if (settings_save(aconfig_getContext(), true) < 0) {
-    term_printString("Error: settings not saved.\n");
-    return;
-  }
-  term_printString("Settings saved.\n");
-}
-
-void term_cmdErase(const char *arg) {
-  settings_erase(aconfig_getContext());
-  term_printString("Settings erased.\n");
-}
-
-void term_cmdGet(const char *arg) {
-  if (arg && strlen(arg) > 0) {
-    SettingsConfigEntry *entry =
-        settings_find_entry(aconfig_getContext(), &arg[0]);
-    if (entry != NULL) {
-      TPRINTF("Key: %s\n", entry->key);
-      TPRINTF("Type: ");
-      switch (entry->dataType) {
-        case SETTINGS_TYPE_INT:
-          TPRINTF("INT");
-          break;
-        case SETTINGS_TYPE_STRING:
-          TPRINTF("STRING");
-          break;
-        case SETTINGS_TYPE_BOOL:
-          TPRINTF("BOOL");
-          break;
-        default:
-          TPRINTF("UNKNOWN");
-          break;
-      }
-      TPRINTF("\n");
-      TPRINTF("Value: %s\n", entry->value);
-    } else {
-      TPRINTF("Key not found.\n");
-    }
-  } else {
-    TPRINTF("No key provided for 'get' command.\n");
-  }
-}
-
-void term_cmdPutInt(const char *arg) {
-  char key[SETTINGS_MAX_KEY_LENGTH] = {0};
-  const char *valueStr = NULL;
-  if (term_parseKeyAndTail(arg, key, sizeof(key), &valueStr) &&
-      (valueStr != NULL) && (valueStr[0] != '\0')) {
-    char *endPtr = NULL;
-    long parsedValue = strtol(valueStr, &endPtr, DEC_BASE);
-    while ((endPtr != NULL) && isspace((unsigned char)*endPtr)) {
-      endPtr++;
-    }
-    if ((endPtr == valueStr) || ((endPtr != NULL) && (*endPtr != '\0')) ||
-        (parsedValue < INT_MIN) || (parsedValue > INT_MAX)) {
-      TPRINTF("Invalid arguments for 'put_int' command.\n");
-      return;
-    }
-
-    int value = (int)parsedValue;
-    int err = settings_put_integer(aconfig_getContext(), key, value);
-    if (err == 0) {
-      TPRINTF("Key: %s\n", key);
-      TPRINTF("Value: %d\n", value);
-    } else {
-      TPRINTF("Error setting integer value for key: %s\n", key);
-    }
-  } else {
-    TPRINTF("Invalid arguments for 'put_int' command.\n");
-  }
-}
-
-void term_cmdPutBool(const char *arg) {
-  char key[SETTINGS_MAX_KEY_LENGTH] = {0};
-  const char *valueToken = NULL;
-  bool value = false;
-
-  if (term_parseKeyAndTail(arg, key, sizeof(key), &valueToken) &&
-      (valueToken != NULL) && term_parseBoolToken(valueToken, &value)) {
-    // Store the boolean value
-    int err = settings_put_bool(aconfig_getContext(), key, value);
-    if (err == 0) {
-      TPRINTF("Key: %s\n", key);
-      TPRINTF("Value: %s\n", value ? "true" : "false");
-    } else {
-      TPRINTF("Error setting boolean value for key: %s\n", key);
-    }
-  } else {
-    TPRINTF(
-        "Invalid arguments for 'put_bool' command. Usage: put_bool <key> "
-        "<true/false>\n");
-  }
-}
-
-void term_cmdPutString(const char *arg) {
-  char key[SETTINGS_MAX_KEY_LENGTH] = {0};
-  const char *value = NULL;
-
-  if (term_parseKeyAndTail(arg, key, sizeof(key), &value)) {
-    const char *safeValue = (value != NULL) ? value : "";
-    int err = settings_put_string(aconfig_getContext(), key, safeValue);
-    if (err == 0) {
-      TPRINTF("Key: %s\n", key);
-      TPRINTF("Value: %s\n", (safeValue[0] != '\0') ? safeValue : "<EMPTY>");
-    } else {
-      TPRINTF("Error setting string value for key: %s\n", key);
-    }
-  } else {
-    TPRINTF("Invalid arguments for 'put_string' command.\n");
-  }
 }

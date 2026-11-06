@@ -1,0 +1,39 @@
+# The setup menu's keys, one each, as a user presses them: [P] toggles the
+# printer and [A] the paper, each shown at once; [T] takes the idle timeout
+# typed in (30), and refuses one out of range (999); [O] takes a new folder
+# (/JOBS); [E] starts the printer. A job printed then (our ESC/P pages, sent
+# by PRFILES) lands in the new folder as a PDF, the one tools/printer/render
+# writes for it, the folder made at the job.
+@disk-a tools/dev/builds/disks/escp.st
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key p
+text "\[P\]rinter +: HP LaserJet II" 300
+key p
+text "\[P\]rinter +: Epson FX-80" 300
+key a
+text "P\[a\]per +: Letter" 300
+key a
+text "P\[a\]per +: A4" 300
+key t
+text "Seconds of quiet that end a job" 300
+type 30
+key 0x1c
+text "\[T\]imeout +: 30 s" 300
+key t
+type 999
+key 0x1c
+text "\[T\]imeout +: 30 s" 300
+key o
+text "The folder for the PDFs" 300
+type /JOBS
+key 0x1c
+text "F\[o\]lder +: /JOBS" 300
+key e
+text "Starting the printer" 300
+wait 100
+key 0x01
+wait 900
+key 0x39
+log "pages: job 00000001 rendered, 3 pages, PDF 32366 bytes" 6000
+cardsame JOBS/00000001.pdf tools/dev/builds/disks/escp-expected.pdf
+cardnone PRINTER/00000001.pdf

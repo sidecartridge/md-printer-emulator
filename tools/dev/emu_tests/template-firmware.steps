@@ -1,9 +1,8 @@
-# [F]irmware in the setup menu hands the ST to the user firmware, whose demo
-# prints its message through GEMDOS (target/atarist/src/userfw.s).
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
-log "Keystroke: f\. " 200
-text "Launching user firmware" 200
+# [E] in the setup menu starts the printer: the ST is handed to the user
+# firmware, the printer's installer (target/atarist/src/userfw.s).
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
+log "Keystroke: e\. " 200
+text "Starting the printer" 200
 screen same userfw 300
 shot userfw

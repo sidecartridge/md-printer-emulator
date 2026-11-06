@@ -166,8 +166,8 @@ probe until it ends: to look at the device during a press, put the reads in that
 (`rp/src/include/devhooks.h`, found by its `devhooksMailbox` symbol) and wait for the main loop to
 acknowledge it. `key` and `inject` queue a protocol command as if the ST had sent it, through
 `chandler_injectProtocol()`, so the firmware handles it through its normal path: the same
-callbacks, the same answer. The setup terminal is line-based, so a menu command is its key and
-then Enter (`swd.py key h`, then `swd.py key $'\n'`). `app NAME` runs the app command defined as
+callbacks, the same answer. The setup menu takes one key a command
+(`swd.py key t` asks the menu's timeout question, `swd.py key $'\x1b'` puts it away). `app NAME` runs the app command defined as
 `DEVHOOKS_APP_<NAME>` in `rp/src/include/emul.h`, handled by `emul_devhooksApp()`:
 
 - `heap_hold KB`: hold KB more kilobytes of heap, on top of what is already held (`heap_hold 0`
@@ -246,7 +246,7 @@ python3 tools/dev/power_cycles.py                            # cold boots: menu 
 - `st_harness.py` tests the command path from the ST's side. It copies the tree to
   `builds/sttree`, puts `sttest.s` in place of `userfw.s`, builds and flashes that debug firmware,
   resets the ST through the sentinel so it runs the new cartridge code, and starts the tests with
-  `[F]irmware`. The ST reports each result as a `$7Fxx` command, which the setup terminal logs:
+  the menu's `[E]`. The ST reports each result as a `$7Fxx` command, which the setup terminal logs:
   - T0: the return address into TOS the cartridge hands over, the machine and TOS, and on a
     Mega STE its speed and cache at the handover, which must be the user's setting.
   - T1: `d0 = 0` with Z set after each sender.

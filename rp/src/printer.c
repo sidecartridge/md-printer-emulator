@@ -38,6 +38,11 @@ static uint32_t jobNumber;
 static FIL file;
 static absolute_time_t lastHeard;  // the ST's last printer command, or boot
 static bool stBooted;              // the job ends once the ring is written
+// The last job the card could not take, until a job closes again: its number
+// (0 for none) and whether the card was full.
+static uint32_t lostJob;
+static bool lostFull;
+
 // NEXT_JOB changed in RAM, not yet in flash. Writing flash stops the main
 // loop, so the ST gets no answer meanwhile: it waits for quiet.
 static bool numberUnsaved;
@@ -82,11 +87,7 @@ static int settingInt(const char *key, int fallback) {
   return entry ? atoi(entry->value) : fallback;
 }
 
-void printer_init(void) {
-  ringHead = 0;
-  ringTail = 0;
-  haveSequence = false;
-  memset(&counters, 0, sizeof(counters));
+void printer_readSettings(void) {
   SettingsConfigEntry *entry =
       settings_find_entry(aconfig_getContext(), ACONFIG_PARAM_FOLDER);
   snprintf(folder, sizeof(folder), "%s", entry ? entry->value : PRINTER_FOLDER);
@@ -95,6 +96,14 @@ void printer_init(void) {
     seconds = PRINTER_IDLE_SECONDS_MIN;
   }
   idleUs = (uint32_t)seconds * 1000000u;
+}
+
+void printer_init(void) {
+  ringHead = 0;
+  ringTail = 0;
+  haveSequence = false;
+  memset(&counters, 0, sizeof(counters));
+  printer_readSettings();
   job = JOB_NONE;
   stBooted = false;
   numberUnsaved = false;
@@ -151,6 +160,15 @@ void __not_in_flash_func(printer_command_cb)(TransmissionProtocol *protocol,
 
 const char *printer_folder(void) { return folder; }
 
+uint32_t printer_lost(bool *full) {
+  if (full != NULL) *full = lostFull;
+  return lostJob;
+}
+
+uint32_t printer_receiving(void) {
+  return job == JOB_WRITING || job == JOB_FAILED ? jobNumber : 0;
+}
+
 void printer_jobPath(char *path, size_t size, uint32_t number,
                      const char *extension) {
   snprintf(path, size, "%s/%08lu%s", folder, (unsigned long)number, extension);
@@ -170,6 +188,30 @@ static bool onCard(uint32_t number) {
     }
   }
   return false;
+}
+
+// Whether the card is full, after a write it refused: under
+// PRINTER_FULL_BYTES free. FatFs reports a full card as a short write, or a
+// disk error when the last cluster cannot be synced; a card that fails cannot
+// say what is free.
+static bool card_full(void) {
+  DWORD clusters = 0;
+  FATFS *fs = NULL;
+  if (f_getfree(folder, &clusters, &fs) != FR_OK || fs == NULL) return false;
+  uint64_t bytes = (uint64_t)clusters * fs->csize * PRINTER_SECTOR_BYTES;
+  return bytes < PRINTER_FULL_BYTES;
+}
+
+// A job the card could not take: what was written of it is deleted, so no
+// part of a job stays on the card, and the menu says why (printer_lost).
+static void lose(uint32_t number, bool full) {
+  char temp[PRINTER_PATH_SIZE];
+  printer_jobPath(temp, sizeof(temp), number, PRINTER_TEMP_EXTENSION);
+  f_unlink(temp);
+  lostJob = number;
+  lostFull = full;
+  DPRINTF("printer: job %08lu lost: %s, deleted\n", (unsigned long)number,
+          full ? "the card is full" : "the card failed");
 }
 
 // A job's first bytes: its file, under the temporary name, and the next
@@ -199,6 +241,7 @@ static void openJob(void) {
   if (res != FR_OK) {
     DPRINTF("printer: cannot open %s (%d)\n", path, res);
     counters.writeErrors++;
+    lose(number, card_full());
     return;
   }
   if (settings_put_integer(aconfig_getContext(), ACONFIG_PARAM_NEXT_JOB,
@@ -224,12 +267,14 @@ static void closeJob(void) {
     }
     if (res == FR_OK) {
       counters.jobs++;
+      lostJob = 0;
       digestLog(jobNumber);
       pages_jobClosed(jobNumber);
     } else {
       DPRINTF("printer: job %08lu not closed (%d)\n", (unsigned long)jobNumber,
               res);
       counters.writeErrors++;
+      lose(jobNumber, card_full());
     }
   }
   job = JOB_NONE;
@@ -292,6 +337,7 @@ void printer_loop(void) {
     counters.lost += chunk - written;
     f_close(&file);
     job = JOB_FAILED;
+    lose(jobNumber, card_full());
   }
 }
 

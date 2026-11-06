@@ -1,0 +1,5 @@
+# The setup menu's countdown: untouched, it starts the printer by itself
+# once its 20 seconds run out, as [E] does.
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+text "Select an option" 100
+text "Starting the printer" 4000

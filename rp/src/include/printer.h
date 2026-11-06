@@ -54,6 +54,8 @@
 #define PRINTER_JOB_LAST 99999999u  // eight digits
 #define PRINTER_PATH_SIZE (SETTINGS_MAX_VALUE_LENGTH + 16)
 #define PRINTER_IDLE_SECONDS_MIN 1
+#define PRINTER_FULL_BYTES (64 * 1024)  // less free after a refused write: full
+#define PRINTER_SECTOR_BYTES 512  // an SD card's sector (ffconf.h's FF_MAX_SS)
 
 typedef struct {
   uint32_t blocks;      // blocks taken
@@ -71,6 +73,23 @@ typedef struct {
  * @brief Reads the folder and the idle timeout from the app's settings.
  */
 void printer_init(void);
+
+/**
+ * @brief Reads the folder and the idle timeout from the settings again: the
+ * menu changed them. Between jobs only.
+ */
+void printer_readSettings(void);
+
+/**
+ * @brief The last job the card could not take, deleted, until another job
+ * closes: its number, or 0; *full says whether the card was full.
+ */
+uint32_t printer_lost(bool *full);
+
+/**
+ * @brief The number of the job being received, or 0.
+ */
+uint32_t printer_receiving(void);
 
 /**
  * @brief The jobs' folder.

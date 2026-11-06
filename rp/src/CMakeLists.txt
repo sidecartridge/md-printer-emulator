@@ -128,6 +128,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         emul.c
         gconfig.c
         hw_config.c
+        menu.c
         pages.c
         printer.c
         reset.c

@@ -1,25 +1,15 @@
-# The PRINTER setting, set to LASERJET in the setup menu as a user does it,
+# The PRINTER setting, set to the LaserJet in the setup menu ([P]) as a user does it,
 # sends a job with no escape code at all to the HP LaserJet II: plain text
 # (the desktop test's PRINT.TXT, twice, sent by PRFILES) printed in its
 # Courier 10 pitch, one page at 300 dpi. Its pixels must be the ones
 # tools/printer/render --laserjet draws, and its PDF the one it writes
 # (make_bench_disks.sh's plain-laserjet.pages and plain-laserjet.pdf).
 @disk-a tools/dev/builds/disks/plain.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-type put_str PRINTER LASERJET
-key 0x1c
-type save
-key 0x1c
-key s
-key 0x1c
-type print
-key 0x1c
-text "PRINTER .STR.: LASERJET" 300
-key m
-key 0x1c
-text "Atari +: (ST|STE|Mega STE), TOS" 300
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key p
+text "\[P\]rinter +: HP LaserJet II" 300
+text "Machine +: (ST|STE|Mega STE), TOS" 300
+key e
 wait 100
 key 0x01
 wait 900

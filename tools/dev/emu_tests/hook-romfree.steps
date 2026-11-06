@@ -4,9 +4,8 @@
 # pages (escp.st's AUTO folder) are printed while the watch is on, so the
 # hook's output, its full-buffer sends and its idle flush all run.
 @disk-a tools/dev/builds/disks/escp.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

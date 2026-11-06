@@ -5,9 +5,8 @@
 # the job, and nothing is on the card.
 @disk-a tools/dev/builds/disks/escp.st
 cardput PRINTER
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

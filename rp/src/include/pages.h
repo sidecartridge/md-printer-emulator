@@ -22,6 +22,7 @@
 #ifndef PAGES_H
 #define PAGES_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define PAGES_PDF_EXTENSION ".pdf"
@@ -38,6 +39,8 @@ typedef struct {
   uint32_t failed;     // jobs not rendered: the card failed
   uint32_t lost;       // dots that fell above the band (fed back past it)
   uint32_t longestUs;  // the longest pass of pages_loop
+  uint32_t lastJob;    // the last job rendered, 0 for none yet
+  uint32_t lastPages;  // its pages: 0, no PDF
 } PagesCounters;
 
 /**
@@ -56,5 +59,15 @@ void pages_jobClosed(uint32_t number);
 void pages_loop(void);
 
 const PagesCounters *pages_getCounters(void);
+
+/**
+ * @brief The number of the job being rendered, or 0.
+ */
+uint32_t pages_rendering(void);
+
+/**
+ * @brief True while a job is being rendered or waits to be.
+ */
+bool pages_busy(void);
 
 #endif  // PAGES_H

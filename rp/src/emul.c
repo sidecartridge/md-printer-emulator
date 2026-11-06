@@ -21,8 +21,9 @@
 #include "display.h"
 #include "ff.h"
 #include "memfunc.h"
-#include "pico/stdlib.h"
+#include "menu.h"
 #include "pages.h"
+#include "pico/stdlib.h"
 #include "printer.h"
 #include "reset.h"
 #include "romemul.h"
@@ -43,48 +44,8 @@ enum {
   APP_MODE_SETUP = 255  // Setup
 };
 
-// Command handlers
-static void cmdMenu(const char *arg);
-static void cmdClear(const char *arg);
-static void cmdExit(const char *arg);
-static void cmdFirmware(const char *arg);
-static void cmdHelp(const char *arg);
-static void cmdBooster(const char *arg);
-static void cmdSettings(const char *arg);
-static void cmdPrint(const char *arg);
-static void cmdSave(const char *arg);
-static void cmdErase(const char *arg);
-static void cmdGet(const char *arg);
-static void cmdPutInt(const char *arg);
-static void cmdPutBool(const char *arg);
-static void cmdPutString(const char *arg);
-
-// Command table
-static const Command commands[] = {
-    {"m", cmdMenu},
-    {"h", cmdHelp},
-    {"e", cmdExit},
-    {"f", cmdFirmware},
-    {"x", cmdBooster},
-    {"?", cmdHelp},
-    {"s", cmdSettings},
-    {"settings", cmdSettings},
-    {"print", cmdPrint},
-    {"save", cmdSave},
-    {"erase", cmdErase},
-    {"get", cmdGet},
-    {"put_int", cmdPutInt},
-    {"put_bool", cmdPutBool},
-    {"put_str", cmdPutString},
-};
-
-// Number of commands in the table
-static const size_t numCommands = sizeof(commands) / sizeof(commands[0]);
-
 // Keep active loop or exit
 static bool keepActive = true;
-static bool menuScreenActive = false;
-static absolute_time_t menuRefreshTime;
 
 #if defined(_DEBUG) && (_DEBUG != 0)
 // Heap held on request by `swd.py app heap_hold`, to test running out of it.
@@ -132,176 +93,37 @@ static void emul_serviceFor(uint32_t ms) {
   }
 }
 
-#define MENU_REFRESH_TIME_MS 1000
-
 // Should we reset the device, or jump to the booster app?
 // By default, we reset the device.
 static bool resetDeviceAtBoot = true;
 
-static void showTitle() {
+// The menu's E: the printer's hook installed, and the ST to GEM. Refused
+// until the ST has said hello: the hook relies on what it publishes then (the
+// machine, for a Mega STE's cache).
+bool emul_startPrinter(void) {
+  if (!chandler_stPresent()) return false;
   term_printString(
       "\x1B"
       "E"
-      "Microfirmware test app - " RELEASE_VERSION "\n");
-}
-
-// What the ST told this RP at its boot: its hello, then its machine (the _MCH
-// cookie, shared variable 0) and its TOS (shared variable 1).
-static void atariLine(char *line, size_t size) {
-  if (!chandler_stPresent()) {
-    snprintf(line, size, "Atari     : no hello yet (reset the ST)");
-    return;
-  }
-  uint32_t machine = 0;
-  uint32_t versions = 0;
-  GET_SHARED_VAR(CHANDLER_HARDWARE_TYPE, &machine,
-                 (uintptr_t)&__rom_in_ram_start__,
-                 CHANDLER_SHARED_VARIABLES_OFFSET);
-  GET_SHARED_VAR(CHANDLER_SVERSION, &versions, (uintptr_t)&__rom_in_ram_start__,
-                 CHANDLER_SHARED_VARIABLES_OFFSET);
-  const char *name = NULL;
-  switch (machine) {
-    case 0x00000000:
-      name = "ST";
-      break;
-    case 0x00010000:
-      name = "STE";
-      break;
-    case 0x00010001:
-      name = "ST Book";
-      break;
-    case 0x00010010:
-      name = "Mega STE";
-      break;
-    case 0x00020000:
-      name = "TT";
-      break;
-    case 0x00030000:
-      name = "Falcon";
-      break;
-    default:
-      break;
-  }
-  uint32_t tos = versions >> 16;
-  if (name != NULL) {
-    snprintf(line, size, "Atari     : %s, TOS %lx.%02lx", name,
-             (unsigned long)(tos >> 8), (unsigned long)(tos & 0xFF));
-  } else {
-    snprintf(line, size, "Atari     : _MCH %08lx, TOS %lx.%02lx",
-             (unsigned long)machine, (unsigned long)(tos >> 8),
-             (unsigned long)(tos & 0xFF));
-  }
-}
-static char atariLineShown[TERM_SCREEN_SIZE_X] = {0};
-
-static void menu(void) {
-  menuScreenActive = true;
-  showTitle();
-  term_printString("\n");
-  term_printString("[S]ettings     | [F]irmware launch\n");
-  term_printString("[E]xit desktop | [X] Back to Booster\n\n");
-  atariLine(atariLineShown, sizeof(atariLineShown));
-  term_printString(atariLineShown);
-  term_printString("\n");
-
-  term_printDeviceInfo();
-
-  term_printString("\n");
-  term_printString("Select an option: ");
-  term_markMenuPromptCursor();
-  menuRefreshTime = make_timeout_time_ms(MENU_REFRESH_TIME_MS);
-}
-
-// Command handlers
-void cmdMenu(const char *arg) { menu(); }
-
-void cmdHelp(const char *arg) {
-  menuScreenActive = false;
-  // term_printString("\x1B" "E" "Available commands:\n");
-  term_printString("Available commands:\n");
-  term_printString(" General:\n");
-  term_printString("  clear   - Clear the terminal screen\n");
-  term_printString("  exit    - Exit the terminal\n");
-  term_printString("  f       - Launch user firmware on the Atari ST\n");
-  term_printString("  help    - Show available commands\n");
-}
-
-void cmdClear(const char *arg) {
-  menuScreenActive = false;
-  term_clearScreen();
-}
-
-void cmdExit(const char *arg) {
-  menuScreenActive = false;
-  term_printString("Exiting terminal...\n");
-  // Send continue to desktop command
-  SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_CONTINUE);
-}
-
-void cmdFirmware(const char *arg) {
-  if (!chandler_stPresent()) {
-    // The user firmware relies on what the ST publishes at boot (the machine
-    // type, for a Mega STE's cache), and this RP has not heard it yet.
-    term_printString("\nReset the Atari ST first.\n");
-    return;
-  }
-  menuScreenActive = false;
-  term_printString("Launching user firmware on the Atari ST...\n");
-  // Write CMD_START into the cartridge sentinel slot. The m68k's
-  // check_commands macro polls the slot every vsync; on CMD_START it
-  // beq's into rom_function, which jmp's to USERFW (target/atarist/src/
-  // userfw.s). The default userfw demo prints
-  // "Example firmware load..." via Cconws and returns.
+      "Starting the printer...\n");
+  display_refresh();
+  // CMD_START in the cartridge's sentinel: the ST's menu loop sees it within
+  // a vsync and jumps to the user firmware, the printer's installer.
   SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_START);
+  return true;
 }
 
-void cmdBooster(const char *arg) {
-  menuScreenActive = false;
-  term_printString("Launching Booster app...\n");
+// The menu's X: the main loop ends, and the RP jumps to Booster.
+void emul_startBooster(void) {
+  term_printString(
+      "\x1B"
+      "E"
+      "Launching Booster app...\n");
   term_printString("The computer will boot shortly...\n\n");
   term_printString("If it doesn't boot, power it on and off.\n");
+  display_refresh();
   resetDeviceAtBoot = false;  // Jump to the booster app
   keepActive = false;         // Exit the active loop
-}
-
-void cmdSettings(const char *arg) {
-  menuScreenActive = false;
-  term_cmdSettings(arg);
-}
-
-void cmdPrint(const char *arg) {
-  menuScreenActive = false;
-  term_cmdPrint(arg);
-}
-
-void cmdSave(const char *arg) {
-  menuScreenActive = false;
-  term_cmdSave(arg);
-}
-
-void cmdErase(const char *arg) {
-  menuScreenActive = false;
-  term_cmdErase(arg);
-}
-
-void cmdGet(const char *arg) {
-  menuScreenActive = false;
-  term_cmdGet(arg);
-}
-
-void cmdPutInt(const char *arg) {
-  menuScreenActive = false;
-  term_cmdPutInt(arg);
-}
-
-void cmdPutBool(const char *arg) {
-  menuScreenActive = false;
-  term_cmdPutBool(arg);
-}
-
-void cmdPutString(const char *arg) {
-  menuScreenActive = false;
-  term_cmdPutString(arg);
 }
 
 // This section contains the functions that are called from the main loop
@@ -318,7 +140,7 @@ static void preinit() {
   term_clearScreen();
 
   // Show the title
-  showTitle();
+  menu_title();
   term_printString("\n\n");
 
   display_refresh();
@@ -332,7 +154,7 @@ void failure(const char *message) {
   term_clearScreen();
 
   // Show the title
-  showTitle();
+  menu_title();
   term_printString("\n\n");
   term_printString(message);
 
@@ -340,39 +162,8 @@ void failure(const char *message) {
 }
 
 static void init(void) {
-  // Set the command table
-  term_setCommands(commands, numCommands);
-
-  // Clear the screen
-  term_clearScreen();
-
-  // Display the menu
-  menu();
-
-  // Example 1: Move the cursor up one line.
-  // VT52 sequence: ESC A (moves cursor up)
-  // The escape sequence "\x1BA" will move the cursor up one line.
-  // term_printString("\x1B" "A");
-  // After moving up, print text that overwrites part of the previous line.
-  // term_printString("Line 2 (modified by ESC A)\n");
-
-  // Example 2: Move the cursor right one character.
-  // VT52 sequence: ESC C (moves cursor right)
-  // term_printString("\x1B" "C");
-  // term_printString(" <-- Moved right with ESC C\n");
-
-  // Example 3: Direct cursor addressing.
-  // VT52 direct addressing uses ESC Y <row> <col>, where:
-  //   row_char = row + 0x20, col_char = col + 0x20.
-  // For instance, to move the cursor to row 0, column 10:
-  //   row: 0 -> 0x20 (' ')
-  //   col: 10 -> 0x20 + 10 = 0x2A ('*')
-  // term_printString("\x1B" "Y" "\x20" "\x2A");
-  // term_printString("Text at row 0, column 10 via ESC Y\n");
-
-  // term_printString("\x1B" "Y" "\x2A" "\x20");
-
-  display_refresh();
+  // The menu's keys, and the menu with its countdown.
+  menu_init();
 }
 
 void emul_start() {
@@ -570,19 +361,11 @@ void emul_start() {
       // its blocks are numbered afresh.
       printer_stBooted();
       term_clearInputBuffer();
-      if (menuScreenActive) {
-        menu();
-        display_refresh();
-      }
+      menu_stBooted();
     }
-    if (chandler_consumeSharedVarSet() && menuScreenActive) {
+    if (chandler_consumeSharedVarSet()) {
       // The ST publishes its machine and TOS just after its hello.
-      char line[TERM_SCREEN_SIZE_X];
-      atariLine(line, sizeof(line));
-      if (strcmp(line, atariLineShown) != 0) {
-        menu();
-        display_refresh();
-      }
+      menu_stPublished();
     }
     // The LED's chip every 10 ms, which leaves the loop to the command ring.
     if (absolute_time_diff_us(nextChipPoll, get_absolute_time()) >= 0) {
@@ -593,16 +376,7 @@ void emul_start() {
     // Run the terminal foreground (consume the published command, render
     // output, etc.).
     term_loop();
-
-    if (menuScreenActive) {
-      char *input = term_getInputBuffer();
-      bool hasPendingInput = (input != NULL) && (input[0] != '\0');
-      if (!hasPendingInput &&
-          (absolute_time_diff_us(get_absolute_time(), menuRefreshTime) <= 0)) {
-        term_refreshMenuLiveInfo();
-        menuRefreshTime = make_timeout_time_ms(MENU_REFRESH_TIME_MS);
-      }
-    }
+    menu_loop();
   }
 
   // 9. Send RESET computer command

@@ -5,9 +5,8 @@
 # then the desktop.
 @printer
 @disk-a tools/dev/builds/disks/prpaths.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
-key f
-key 0x1c
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key e
 wait 100
 key 0x01
 wait 900

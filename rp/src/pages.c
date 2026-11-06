@@ -384,6 +384,8 @@ static void delete_job(void) {
   f_unlink(path);
   counters.jobs++;
   counters.lost += raster.lost;
+  counters.lastJob = jobNumber;
+  counters.lastPages = jobPages;
   DPRINTF(
       "pages: job %08lu rendered, %lu pages, PDF %lu bytes, %lld us, "
       "longest pass %lu us, %lu dots lost\n",
@@ -499,3 +501,7 @@ void pages_loop(void) {
 }
 
 const PagesCounters *pages_getCounters(void) { return &counters; }
+
+uint32_t pages_rendering(void) { return state == STATE_IDLE ? 0 : jobNumber; }
+
+bool pages_busy(void) { return state != STATE_IDLE || nextJob <= lastClosed; }

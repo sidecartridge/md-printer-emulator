@@ -10,6 +10,8 @@ void usbvol_init(void) {}
 
 void usbvol_loop(void) {}
 
+void usbvol_folderChanged(void) {}
+
 bool usbvol_mounted(void) { return false; }
 
 const UsbvolCounters *usbvol_getCounters(void) { return &counters; }

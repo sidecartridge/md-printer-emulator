@@ -1,0 +1,6 @@
+# Any key stops the setup menu's countdown: 30 seconds later the menu is
+# still there, and the printer was not started.
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
+key 0x39
+wait 1600
+text "Select an option" 100

@@ -1,19 +1,22 @@
 # A card that fills up in the middle of a job does not hold up the ST: with
 # 2 KB left on the card, PRFILES still prints our ESC/P pages (2962 bytes) to
 # the end, and the RP answers every block (the hook drops nothing). The RP
-# writes what fits, says the write failed, and loses the rest of the job; the
-# job never gets its final name.
+# writes what fits, says the write failed, and deletes the job: no part of it
+# stays on the card, and the menu says it was lost. The RP tells a full card
+# by its free space, which EmuMD always gives as 16 GB: here the job is lost
+# because "the card failed", on a real full card because "the card is full".
 @disk-a tools/dev/builds/disks/escp.st
-text "Atari +: (ST|STE|Mega STE), TOS" 1500
+text "Machine +: (ST|STE|Mega STE), TOS" 1500
 cardfull 2048
-key f
-key 0x1c
+key e
 wait 100
 key 0x01
 wait 900
 key 0x39
 hookdone 2962 3000
 log "printer: write failed" 100
+log "printer: job 00000001 lost: the card (is full|failed), deleted" 100
 wait 600
 cardnone PRINTER/*.PRN
+cardnone PRINTER/*.TMP
 hookstate
