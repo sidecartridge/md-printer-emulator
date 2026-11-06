@@ -30,6 +30,7 @@
 #include "select.h"
 #include "target_firmware.h"  // Include the target firmware binary
 #include "term.h"
+#include "usbvol.h"
 
 #define SLEEP_LOOP_MS 100
 
@@ -528,6 +529,7 @@ void emul_start() {
   } else {
     DPRINTF("SD card found & initialized\n");
     pages_init();
+    usbvol_init();
   }
 
   // Initialize the display again (in case the terminal emulator changed it)
@@ -561,6 +563,7 @@ void emul_start() {
     chandler_loop();
     printer_loop();
     pages_loop();
+    usbvol_loop();
     if (chandler_consumeStBoot()) {
       // A new ST session: nothing typed before the reset carries over, and
       // the ST gets a freshly drawn menu; the printer's job has ended and
