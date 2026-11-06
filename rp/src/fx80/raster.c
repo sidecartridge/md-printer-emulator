@@ -80,6 +80,44 @@ void fx80_raster_dot(Fx80Raster *r, int32_t x, int32_t y) {
   }
 }
 
+void fx80_raster_pixels(Fx80Raster *r, int32_t x, int32_t y,
+                        const uint8_t *bits, int32_t count, int32_t scale) {
+  if (y < 0 || y >= r->height) return;
+  if (r->windowEnd && (y < r->top || y >= r->windowEnd)) return;
+  if (y < r->top) {
+    for (int32_t i = 0; i < count; i++) {
+      if (bits[i >> 3] & (0x80 >> (i & 7))) r->lost++;
+    }
+    return;
+  }
+  while (y >= r->top + r->rows) hand_on(r);
+  uint8_t *row = row_bits(r, y);
+  for (int32_t i = 0; i < count; i++) {
+    if (bits[i >> 3] == 0 && (i & 7) == 0) {  // a byte of no ink at once
+      i += 7;
+      continue;
+    }
+    if (!(bits[i >> 3] & (0x80 >> (i & 7)))) continue;
+    int32_t from = x + i * scale;
+    int32_t to = from + scale;
+    if (from < 0) from = 0;
+    if (to > r->width) to = r->width;
+    for (int32_t px = from; px < to; px++) row[px >> 3] |= 0x80 >> (px & 7);
+  }
+}
+
+void fx80_raster_window(Fx80Raster *r) {
+  r->windowEnd = r->top + r->rows < r->height ? r->top + r->rows : r->height;
+}
+
+bool fx80_raster_windowDone(Fx80Raster *r, int32_t maxRows) {
+  while (r->top < r->windowEnd && maxRows-- > 0) hand_on(r);
+  if (r->top < r->windowEnd) return false;
+  r->windowEnd = 0;
+  if (r->top >= r->height) r->top = 0;
+  return true;
+}
+
 bool fx80_raster_finish(Fx80Raster *r, int32_t maxRows) {
   while (r->top < r->height && maxRows-- > 0) hand_on(r);
   if (r->top < r->height) return false;

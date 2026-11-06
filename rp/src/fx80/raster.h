@@ -33,6 +33,7 @@ typedef struct {
   Fx80RowOut rowOut;
   void *ctx;
   uint32_t lost;   // dots that fell above the band
+  int32_t windowEnd;  // in a window: the row past it, else 0
 } Fx80Raster;
 
 /**
@@ -53,6 +54,34 @@ void fx80_raster_init(Fx80Raster *r, uint8_t *bits, int32_t width,
  * leave the band are handed on first.
  */
 void fx80_raster_dot(Fx80Raster *r, int32_t x, int32_t y);
+
+/**
+ * @brief Inks pixels of page row y from pixel x: count pixels of bits, the
+ * first in bit 7 of bits[0], each repeated scale times across (another
+ * printer's image, drawn pixel for pixel; a LaserJet's at 150 dpi on a 300
+ * dpi page). Pixels past the page's edges are left out. Rows above it that
+ * leave the band are handed on first; inked pixels above the band are lost
+ * (counted).
+ */
+void fx80_raster_pixels(Fx80Raster *r, int32_t x, int32_t y,
+                        const uint8_t *bits, int32_t count, int32_t scale);
+
+/**
+ * @brief A window of the page: from the first row not handed on, as many
+ * rows as the band holds. Only what falls in it is drawn; nothing else is
+ * lost, nor is a row handed on before fx80_raster_windowDone. A page drawn
+ * window by window, a pass over its bytes for each, comes out whole however
+ * its printer moved up and down.
+ */
+void fx80_raster_window(Fx80Raster *r);
+
+/**
+ * @brief The window's pass is over: hands on up to maxRows of its rows.
+ * @return true once they are all handed on; the next window then starts at
+ * the next row (fx80_raster_window), or, at the page's foot, the raster is
+ * at the top of a blank page.
+ */
+bool fx80_raster_windowDone(Fx80Raster *r, int32_t maxRows);
 
 /**
  * @brief The page's end: hands on up to maxRows of the rows left.
