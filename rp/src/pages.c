@@ -17,6 +17,8 @@
 #include "fx80/fx80.h"
 #include "fx80/raster.h"
 #include "md5/md5.h"
+#include "pcl/pcl.h"
+#include "pcl/pclpage.h"
 #include "pdf/pdf.h"
 #include "pico/stdlib.h"
 #include "printer.h"
@@ -26,7 +28,14 @@
 
 #define JOB_DIGITS 8
 
-static Fx80 printer;
+// A job is printed by one printer or the other: they share their RAM.
+static union {
+  Fx80 fx80;
+  PclPage laserjet;
+} printer;
+static bool laserjet;  // this job's printer is the LaserJet
+static int32_t dpiX;   // this job's pages' resolution
+static int32_t dpiY;
 static Fx80Raster raster;
 static uint8_t band[PAGES_BAND_ROWS * BAND_STRIDE];
 static Pdf pdf;
@@ -93,8 +102,7 @@ static bool write_card(void *ctx, const uint8_t *data, uint32_t size) {
 static void on_row(void *ctx, int32_t row, const uint8_t *bits) {
   (void)ctx;
   if (row == 0) {
-    pdf_pageBegin(&pdf, raster.width, raster.height, FX80_RASTER_DPI_X,
-                  FX80_RASTER_DPI_Y);
+    pdf_pageBegin(&pdf, raster.width, raster.height, dpiX, dpiY);
   }
   pdf_row(&pdf, bits);
   digest_row(row, bits);
@@ -130,6 +138,28 @@ static bool paper_letter(void) {
   SettingsConfigEntry *entry =
       settings_find_entry(aconfig_getContext(), ACONFIG_PARAM_PAPER);
   return entry != NULL && strcasecmp(entry->value, "LETTER") == 0;
+}
+
+// The PRINTER setting: LASERJET, or the FX-80 for any other value.
+static bool printer_laserjet(void) {
+  SettingsConfigEntry *entry =
+      settings_find_entry(aconfig_getContext(), ACONFIG_PARAM_PRINTER);
+  return entry != NULL && strcasecmp(entry->value, "LASERJET") == 0;
+}
+
+static bool read_job(void *ctx, uint8_t *data, uint32_t size, uint32_t *got) {
+  UINT length = 0;
+  FRESULT res = f_read(ctx, data, size, &length);
+  *got = length;
+  if (res != FR_OK) {
+    DPRINTF("pages: job %08lu: read failed (%d)\n", (unsigned long)jobNumber,
+            res);
+  }
+  return res == FR_OK;
+}
+
+static bool seek_job(void *ctx, uint32_t offset) {
+  return f_lseek(ctx, offset) == FR_OK;
 }
 
 // The next job to render, in RAM: it reaches flash with NEXT_JOB, which the
@@ -267,13 +297,33 @@ static void start(void) {
     advance();
     return;
   }
+  // The setting's printer, or the LaserJet for a job that starts in PCL.
+  bufferLength = 0;
+  laserjet = printer_laserjet() ||
+             (f_read(&file, buffer, sizeof(buffer), &bufferLength) == FR_OK &&
+              pcl_recognise(buffer, bufferLength));
+  f_lseek(&file, 0);
   bool letter = paper_letter();
-  int32_t width = letter ? FX80_LETTER_WIDTH : FX80_A4_WIDTH;
-  int32_t length = letter ? FX80_LETTER_LENGTH : FX80_A4_LENGTH;
   pdf_begin(&pdf, write_card, &pdfFile);
-  fx80_raster_init(&raster, band, fx80_raster_width(width),
-                   fx80_raster_height(length), PAGES_BAND_ROWS, on_row, NULL);
-  fx80_init(&printer, &sink, width, length);
+  if (laserjet) {
+    int32_t width = letter ? PCL_LETTER_WIDTH : PCL_A4_WIDTH;
+    int32_t length = letter ? PCL_LETTER_LENGTH : PCL_A4_LENGTH;
+    dpiX = dpiY = PCL_DPI;
+    fx80_raster_init(&raster, band, width, length,
+                     (int32_t)sizeof(band) / ((width + 7) / 8), on_row, NULL);
+    pcl_page_init(&printer.laserjet, &raster, width, length,
+                  letter ? PCL_LETTER_OFFSET : PCL_A4_OFFSET, read_job,
+                  seek_job, &file, buffer, sizeof(buffer));
+  } else {
+    int32_t width = letter ? FX80_LETTER_WIDTH : FX80_A4_WIDTH;
+    int32_t length = letter ? FX80_LETTER_LENGTH : FX80_A4_LENGTH;
+    dpiX = FX80_RASTER_DPI_X;
+    dpiY = FX80_RASTER_DPI_Y;
+    fx80_raster_init(&raster, band, fx80_raster_width(width),
+                     fx80_raster_height(length), PAGES_BAND_ROWS, on_row,
+                     NULL);
+    fx80_init(&printer.fx80, &sink, width, length);
+  }
   state = STATE_RENDERING;
   atEnd = false;
   bufferLength = bufferPos = 0;
@@ -340,20 +390,47 @@ static void delete_job(void) {
       (unsigned long)jobNumber, (unsigned long)jobPages, (unsigned long)pdfSize,
       absolute_time_diff_us(jobStart, get_absolute_time()),
       (unsigned long)jobLongestUs, (unsigned long)raster.lost);
+  if (laserjet) {
+    DPRINTF("pages: job %08lu: LaserJet, %lu passes over its pages%s\n",
+            (unsigned long)jobNumber, (unsigned long)printer.laserjet.passes,
+            printer.laserjet.failed ? ", the job could not be read again" : "");
+  }
   advance();
   state = STATE_IDLE;
 }
 
+// A page's rows all handed on.
+static void page_done(void) {
+  jobPages++;
+  counters.pages++;
+  pdf_pageEnd(&pdf);
+  page_log();
+}
+
+// The LaserJet: each page followed, then drawn (pcl/pclpage.h).
+static void render_laserjet(absolute_time_t until) {
+  do {
+    PclPageStep step = pcl_page_step(&printer.laserjet);
+    if (step == PCL_PAGE_DONE) {
+      page_done();
+    } else if (step == PCL_PAGE_END) {
+      close_pdf();
+      return;
+    }
+  } while (absolute_time_diff_us(get_absolute_time(), until) > 0);
+}
+
 static void render(void) {
   absolute_time_t until = make_timeout_time_us(PAGES_BUDGET_US);
+  if (laserjet) {
+    render_laserjet(until);
+    return;
+  }
   do {
     if (pagesPending) {
       if (!fx80_raster_finish(&raster, PAGES_FINISH_ROWS)) continue;
       pagesPending--;
-      jobPages++;
-      counters.pages++;
-      pdf_pageEnd(&pdf);
-      page_log();
+      page_done();
       continue;
     }
     if (atEnd) {
@@ -369,12 +446,12 @@ static void render(void) {
         bufferLength = 0;
       }
       if (bufferLength == 0) {
-        fx80_end(&printer);
+        fx80_end(&printer.fx80);
         atEnd = true;
       }
       continue;
     }
-    fx80_byte(&printer, buffer[bufferPos++]);
+    fx80_byte(&printer.fx80, buffer[bufferPos++]);
   } while (absolute_time_diff_us(get_absolute_time(), until) > 0);
 }
 

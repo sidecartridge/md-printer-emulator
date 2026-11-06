@@ -6,7 +6,9 @@
  * Usage:  render [--letter] [--laserjet] [--band ROWS] [--pdf OUT.pdf] FILE
  *         OUTDIR
  *         OUTDIR/page-001.png, ...; prints "page N WxH MD5" per page.
- *         --laserjet prints as the HP LaserJet II (rp/src/pcl) at 300 dpi.
+ *         The HP LaserJet II (rp/src/pcl) prints at 300 dpi a stream that
+ *         starts in PCL (pcl_recognise), as the firmware does, or any with
+ *         --laserjet; the FX-80 the rest.
  *         --band draws through a band of ROWS rows, as the firmware does;
  *         the pages must come out the same as with the whole page.
  *         --pdf also writes the pages as a PDF (rp/src/pdf), as the firmware
@@ -169,6 +171,15 @@ int main(int argc, char **argv) {
   static Render re;
   static Fx80 printer;
   re.dir = argv[a + 1];
+  FILE *in = fopen(file, "rb");
+  if (!in) {
+    fprintf(stderr, "render: cannot read %s\n", file);
+    return 1;
+  }
+  uint8_t start[512];  // as much as the firmware looks at
+  size_t got = fread(start, 1, sizeof(start), in);
+  if (pcl_recognise(start, (uint32_t)got)) laserjet = 1;
+  rewind(in);
   int32_t w = fx80_raster_width(width);
   int32_t h = fx80_raster_height(length);
   re.dpiX = FX80_RASTER_DPI_X;
@@ -182,8 +193,7 @@ int main(int argc, char **argv) {
   int32_t stride = (w + 7) / 8;
   uint8_t *bits = malloc((size_t)stride * rows);
   re.page = malloc((size_t)stride * h);
-  FILE *in = fopen(file, "rb");
-  if (!in || !bits || !re.page) {
+  if (!bits || !re.page) {
     fprintf(stderr, "render: cannot read %s\n", file);
     return 1;
   }

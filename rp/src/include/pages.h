@@ -1,9 +1,12 @@
 /**
  * File: pages.h
  * Description: The printer's jobs rendered into pages as an Epson FX-80
- *              prints them (fx80/fx80.h) and written as a PDF (pdf/pdf.h): a
- *              job is read back from the card once it has closed, a little
- *              at a time in the main loop, so receiving is never slowed.
+ *              prints them (fx80/fx80.h), or an HP LaserJet II (pcl/pcl.h),
+ *              and written as a PDF (pdf/pdf.h): a job is read back from the
+ *              card once it has closed, a little at a time in the main loop,
+ *              so receiving is never slowed. The PRINTER setting names the
+ *              printer; a job that starts in PCL goes to the LaserJet
+ *              whatever it says.
  *              Debug builds log each page's size and the MD5 of its pixels,
  *              which tools/printer/render gives for the same job.
  *

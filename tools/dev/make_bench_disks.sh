@@ -10,6 +10,10 @@
 #                 escp-expected.pdf and escp-expected-letter.pdf, its PDF as
 #                 the firmware writes it on A4 and on Letter
 #                 (tools/printer/render, the firmware's own renderer)
+#   pcl.st        the same with our PCL streams as TEXT.PRN and GRAPH.PRN
+#                 (tools/printer/pclstreams.py: RASTER.PCL, PAGES.PCL), one
+#                 LaserJet job; pcl-expected.prn, and pcl-expected.pdf and
+#                 pcl-expected.pages, as the firmware renders it on A4
 #
 # Usage:  tools/dev/make_bench_disks.sh
 
@@ -38,3 +42,12 @@ mkdir -p "$WORK/pages"
 "$DEV/builds/printer/render" --letter --pdf "$OUT/escp-expected-letter.pdf" "$OUT/escp-expected.prn" \
   "$WORK/pages" > /dev/null
 "$DEV/make_floppy.sh" "$WORK/escp" "$OUT/escp.st" ESCP
+mkdir -p "$WORK/pcl/AUTO" "$WORK/pclstreams"
+cp "$DEV/builds/st/PRFILES.PRG" "$WORK/pcl/AUTO/"
+python3 "$DEV/../printer/pclstreams.py" "$WORK/pclstreams"
+cp "$WORK/pclstreams/RASTER.PCL" "$WORK/pcl/TEXT.PRN"
+cp "$WORK/pclstreams/PAGES.PCL" "$WORK/pcl/GRAPH.PRN"
+cat "$WORK/pcl/TEXT.PRN" "$WORK/pcl/GRAPH.PRN" > "$OUT/pcl-expected.prn"
+"$DEV/builds/printer/render" --pdf "$OUT/pcl-expected.pdf" "$OUT/pcl-expected.prn" "$WORK/pages" \
+  > "$OUT/pcl-expected.pages" 2> /dev/null
+"$DEV/make_floppy.sh" "$WORK/pcl" "$OUT/pcl.st" PCL
