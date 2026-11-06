@@ -3,8 +3,13 @@
 
 Usage:  pdfcheck.py FILE.pdf PAGES
         PAGES is render's output for the same stream ("page N WxH MD5" per
-        line). pdfinfo (poppler) must read the PDF without a word on stderr,
-        with as many pages, each the size of its pixels at 240 x 216 dpi.
+        line). Its structure must be exact, since a reader that repairs a
+        file without a word (Acrobat) would hide a fault: startxref finds the
+        cross-reference table, each object is where the table says, the
+        trailer's /Size is the table's, and each stream holds as many bytes
+        as its /Length says. pdfinfo (poppler) must read the PDF without a
+        word on stderr, with as many pages, each the size of its pixels at
+        240 x 216 dpi.
         Each image must inflate (zlib, its Adler-32 checked) to the page's
         pixels, and pdfimages must decode it to them too, its PBM's unused
         bits at the end of each row aside. Prints ok or FAIL and why.
@@ -25,6 +30,34 @@ def fail(why):
     sys.exit(1)
 
 
+def check_structure(data):
+    start = int(re.search(rb"startxref\n(\d+)\n%%EOF\n$", data).group(1))
+    m = re.compile(rb"xref\n0 (\d+)\n").match(data, start)
+    if not m:
+        fail(f"startxref {start} does not find the cross-reference table")
+    size = int(m.group(1))
+    table = data[m.end():m.end() + 20 * size]
+    offsets = {}
+    for n in range(size):
+        entry = table[20 * n:20 * n + 20]
+        if not re.fullmatch(rb"\d{10} \d{5} [nf] \n", entry):
+            fail(f"cross-reference entry {n} is {entry!r}")
+        if entry[17:18] == b"n":
+            offset = int(entry[:10])
+            if not data.startswith(b"%d 0 obj\n" % n, offset):
+                fail(f"object {n} is not at {offset}")
+            offsets[n] = offset
+    trailer = re.compile(rb"trailer\n<< /Size (\d+) ").match(data, m.end() + 20 * size)
+    if not trailer or int(trailer.group(1)) != size:
+        fail(f"the trailer's /Size is not the table's {size}")
+    for m in re.finditer(rb"/Length (\d+)( 0 R)? >>\nstream\n", data):
+        length = int(m.group(1))
+        if m.group(2):
+            length = int(re.compile(rb"\d+ 0 obj\n(\d+)\nendobj").match(data, offsets[length]).group(1))
+        if not data.startswith(b"\nendstream", m.end() + length):
+            fail(f"the stream at {m.end()} is not {length} bytes")
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -35,6 +68,7 @@ def main():
         w, h = map(int, size.split("x"))
         want.append((w, h, md5))
 
+    check_structure(Path(pdf).read_bytes())
     info = subprocess.run(["pdfinfo", "-f", "1", "-l", str(len(want)), pdf],
                           capture_output=True, text=True)
     if info.returncode or info.stderr.strip():

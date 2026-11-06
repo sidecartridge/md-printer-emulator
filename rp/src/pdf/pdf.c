@@ -104,12 +104,12 @@ void pdf_pageBegin(Pdf *pdf, int32_t width, int32_t height, int32_t dpiX,
   char contents[64];
   snprintf(contents, sizeof(contents), "q %ld.%02ld 0 0 %ld.%02ld 0 0 cm",
            w / 100, w % 100, h / 100, h % 100);
-  strcat(contents, " /Im Do Q\n");
+  strcat(contents, " /Im Do Q");
   object_start(pdf, 1);
   put_textf(pdf, "%ld 0 obj\n<< /Length %ld >>\nstream\n", page_object(page, 1),
             (long)strlen(contents), 0);
   put_text(pdf, contents);
-  put_text(pdf, "endstream\nendobj\n");
+  put_text(pdf, "\nendstream\nendobj\n");
 
   object_start(pdf, 2);
   put_textf(pdf,
