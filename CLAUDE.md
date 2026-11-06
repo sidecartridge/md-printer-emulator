@@ -6,7 +6,7 @@ See also: `programming.md` (full shared-region table and budget rules), `README.
 
 ## What this repo is
 
-A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. What the ST prints already reaches the card as raw jobs ("The printer path" below); there is no rendering to PDF yet, and `desc/app.json`, `README.md` and `CHANGELOG.md` are still the template's. Where this file says "the template", it describes the inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
+A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. What the ST prints reaches the card as a job and becomes a PDF there ("The printer path" below); `desc/app.json`, `README.md` and `CHANGELOG.md` are still the template's. Where this file says "the template", it describes the inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
 
 ## Build
 
@@ -175,9 +175,13 @@ What a program prints on the ST becomes bytes on the RP:
   A4 page at 240 x 216 dpi, through a band of 128 rows (`raster.c`; the page is 627 KB). Each row
   goes straight into the job's PDF (`pdf.c`), one image a page, compressed with Flate by our own
   encoder (`deflate.c`: matches within the last 1 KB, fixed Huffman codes, 8 KB of RAM). The PDF
-  is `nnnnnnnn.PDT` until it is whole, then `nnnnnnnn.pdf`, and the job's `.PRN` is deleted
-  unless the `KEEP_RAW` setting is on. At boot, `pages_init()` closes a `.TMP` a reboot cut
-  short, deletes a `.PDT` and renders every `.PRN` without its PDF. A debug build logs each
+  is `nnnnnnnn.PDT` until it is whole, then `nnnnnnnn.pdf`, and the job's `.PRN` is deleted: it
+  only waits to be rendered (one that fails stays). Jobs are rendered in the order of their
+  numbers and the folder is never listed, since each lookup reads the whole folder: `NEXT_PDF`,
+  the next job to render, is stored in flash with `NEXT_JOB`, and at boot `pages_init()` looks
+  only at the jobs from there on, one number at a time, closing a `.TMP` a reboot cut short,
+  deleting a `.PDT`, and deleting a `.PRN` beside its whole PDF. Opening, naming and deleting a
+  file each take a pass of their own. A debug build logs each
   page's MD5 and the PDF's size, which `tools/printer/render [--pdf]` gives for the same job on
   the computer; `tools/printer/test.sh` is the host test (golden page MD5s of our own streams,
   each PDF checked with poppler by `pdfcheck.py`).

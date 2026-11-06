@@ -5,8 +5,10 @@
 # [F]irmware has installed the printer hook: switched off, the printer port
 # gets the bytes (the reference, the same screen and the same cartridge as
 # the second run); switched on, the hook sends them to the RP, which writes
-# them, one file per job, to PRINTER/ on its card. PASS when the port's bytes
-# equal the jobs' files, in order, byte for byte.
+# them, one file per job, to PRINTER/ on its card. A job's file is deleted
+# once its PDF is written: the RP's debug log gives each job's size and MD5 as
+# it closes. PASS when the port's bytes, cut at the jobs' sizes in order, give
+# the jobs' MD5s, with nothing left over.
 #
 # Usage:  tools/dev/hook_fidelity.sh TEST SETUP [--timeout S]
 
@@ -23,14 +25,29 @@ python3 "$DEV/emu_harness.py" --setup "$SETUP" --step "wait 1" --name build --ti
 off="$(run off "$@")"
 on="$(run on "$@")"
 ref="$off/printer.out"
-got="$on/card.prn"
-cat "$on"/sd/PRINTER/*.PRN > "$got" 2>/dev/null
 verdict() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['result'])" "$1/report.json" 2>/dev/null || echo "?"; }
 echo "off: $(verdict "$off") $(stat -f %z "$ref" 2>/dev/null || echo 0) bytes on the port  ($off)"
-echo "on:  $(verdict "$on") $(stat -f %z "$got" 2>/dev/null || echo 0) bytes on the card  ($on)"
-if [[ -s "$ref" ]] && cmp -s "$ref" "$got"; then
-  echo "hook_fidelity: PASS $TEST $SETUP: the RP got the printer port's bytes, byte for byte"
-else
-  echo "hook_fidelity: FAIL $TEST $SETUP: $(cmp "$ref" "$got" 2>&1 | head -1)"
+echo "on:  $(verdict "$on")  ($on)"
+# Prints the jobs' total and, when they differ from the port's bytes, where.
+if ! diff="$(python3 - "$ref" "$on/hatari.out" <<'PY'
+import hashlib, re, sys
+ref = open(sys.argv[1], "rb").read() if sys.argv[1] else b""
+log = open(sys.argv[2], "rb").read()
+jobs = re.findall(rb"printer: job (\d{8}) closed, (\d+) bytes, MD5 ([0-9a-f]{32})", log)
+pos = 0
+for number, size, md5 in jobs:
+    part = ref[pos:pos + int(size)]
+    if hashlib.md5(part).hexdigest() != md5.decode():
+        print(f"job {number.decode()} ({int(size)} bytes from byte {pos}) differs")
+        sys.exit(1)
+    pos += int(size)
+if not ref or pos != len(ref):
+    print(f"the jobs hold {pos} bytes, the port {len(ref)}")
+    sys.exit(1)
+print(f"{len(jobs)} jobs, {pos} bytes")
+PY
+)"; then
+  echo "hook_fidelity: FAIL $TEST $SETUP: $diff"
   exit 1
 fi
+echo "hook_fidelity: PASS $TEST $SETUP: the RP got the printer port's bytes, byte for byte ($diff)"

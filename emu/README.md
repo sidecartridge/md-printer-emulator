@@ -90,15 +90,14 @@ options. References are `tools/dev/emu_refs/<setup>/<name>.png`, made with
 
 `tools/dev/hook_fidelity.sh TEST SETUP` runs a printing test twice on the firmware after
 `[F]irmware` (`--via-firmware`): with the printer switched off (`--hook off`), the printer port
-gets the reference; switched on, the RP's jobs on the card, in order, must hold the same bytes.
-A job is a file only once it has ended, so with the hook on a test's `printer` step becomes
-`cardfile`, which waits until the hook has taken nothing for the same quiet time, its buffer is
+gets the reference; switched on, the RP's jobs, in order, must hold the same bytes.
+A job counts only once it has ended, so with the hook on a test's `printer` step becomes
+`jobbytes`, which waits until the hook has taken nothing for the same quiet time, its buffer is
 empty and the jobs hold every byte it took.
 
-The firmware deletes a job once its PDF is written unless its `KEEP_RAW` setting is on, and
-the tests compare the jobs' bytes: on the fork the harness first sets it (`setting KEEP_RAW
-true`, through `emu/template_extra.c`), unless a test says `@keep-raw off` or the command line
-`--keep-raw off`.
+The firmware deletes a job's file once its PDF is written, so the tests check a job's bytes
+through the size and MD5 the debug build logs as the job closes (`jobbytes`, `jobsame`), not
+on the card.
 
 `--fast` runs Hatari as fast as it goes while the firmware keeps the host's time: tests that
 time a reset or a boot in frames (`hook-jobs`, `hook-reset`) fail with it; run them without.

@@ -8,10 +8,13 @@
  *              which tools/printer/render gives for the same job.
  *
  * A job's PDF is written as nnnnnnnn.PDT and renamed nnnnnnnn.pdf once
- * whole; the job, nnnnnnnn.PRN, is then deleted unless the KEEP_RAW setting
- * is on. At boot the jobs a reboot cut short are finished: a job still under
- * its temporary name is closed, a PDF not finished is deleted, and every job
- * without its PDF is rendered, the oldest first.
+ * whole; the job, nnnnnnnn.PRN, is then deleted: it only waits to be
+ * rendered. Jobs are rendered in the order of their numbers, and the folder
+ * is never listed: NEXT_PDF, the next job to render, is stored with
+ * NEXT_JOB. At boot each job from NEXT_PDF on that a reboot cut short is
+ * finished: a job still under its temporary name is closed, a PDF not
+ * finished is deleted, and a job beside its whole PDF is deleted. A job whose
+ * PDF fails stays on the card.
  */
 #ifndef PAGES_H
 #define PAGES_H
@@ -21,7 +24,6 @@
 #define PAGES_PDF_EXTENSION ".pdf"
 #define PAGES_PDF_TEMP_EXTENSION ".PDT"
 
-#define PAGES_QUEUE 4         // closed jobs waiting to be rendered
 #define PAGES_BAND_ROWS 128   // rows of the page in RAM (fx80/raster.h)
 #define PAGES_READ_SIZE 512   // bytes read from the card at a time
 #define PAGES_BUDGET_US 1000  // rendering in one pass of the main loop
@@ -41,7 +43,7 @@ typedef struct {
 void pages_init(void);
 
 /**
- * @brief A job has closed: it is rendered once the jobs before it are.
+ * @brief Job NUMBER has closed: it is rendered once the jobs before it are.
  */
 void pages_jobClosed(uint32_t number);
 

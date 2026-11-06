@@ -12,5 +12,5 @@ key 0x01
 wait 900
 cartexec watch
 key 0x39
-cardfile PRINTER/*.PRN 2938 3000
+jobbytes * 2938 3000
 cartexec none

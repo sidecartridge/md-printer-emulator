@@ -5,9 +5,8 @@
 # host test draws for the two files (tools/printer/golden/TEXT.PRN.pages and
 # GRAPH.PRN.pages): the debug build logs each page's MD5. The PDF must be the
 # one tools/printer/render writes for the same bytes (make_bench_disks.sh's
-# escp-expected.pdf), and the job deleted once it is, KEEP_RAW being off.
+# escp-expected.pdf), and the job deleted once it is.
 @disk-a tools/dev/builds/disks/escp.st
-@keep-raw off
 text "Atari +: (ST|STE|Mega STE), TOS" 1500
 key f
 key 0x1c
