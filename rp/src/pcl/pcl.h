@@ -9,8 +9,9 @@
  * decipoints (1/720), columns (the HMI, in 1/120) and rows (the VMI, in 1/48)
  * exactly. X runs from the logical page's left edge, which is the paper's
  * less PCL_*_OFFSET dots; Y from the top margin, which is the paper's top
- * edge plus the top margin. Text is not drawn yet: a character moves the
- * cursor on and is counted.
+ * edge plus the top margin. Text is drawn in the built-in fonts of
+ * pclfont.h, its baseline at the cursor, the font picked by its pitch and
+ * stroke weight as the LaserJet II picks among its own.
  */
 #ifndef PCL_H
 #define PCL_H
@@ -40,6 +41,13 @@ typedef struct {
 } PclSink;
 
 typedef struct {
+  int32_t symbolSet;  // its value x 32 + its letter's (8U is 277)
+  int32_t pitch;      // characters an inch, x 100
+  uint8_t weight;     // stroke weight: 0 medium, more bold
+  uint8_t font;       // the built-in font it picks (pcl_fonts)
+} PclFontSelect;
+
+typedef struct {
   PclSink sink;
   int32_t length;  // the paper's length, units
   int32_t width;   // the logical page's width, units
@@ -52,7 +60,7 @@ typedef struct {
   char value[PCL_VALUE_SIZE];
   uint8_t valueLength;
   uint32_t dataLeft;  // bytes of a command's data still to come
-  bool dataRaster;    // the data is a raster row (else it is skipped)
+  uint8_t dataKind;   // a raster row, characters, or skipped
   bool moreValues;    // the command ended in lowercase: another follows
 
   // The page.
@@ -65,6 +73,10 @@ typedef struct {
   int32_t rightMargin;
   bool perforationSkip;
   uint8_t lineTermination;  // ESC &k#G
+  bool wrap;                // past the right margin onto the next line
+  bool underline;
+  PclFontSelect fonts[2];  // the primary and the secondary
+  uint8_t active;          // the font in use: 0 primary, 1 secondary
   bool pageDirty;
 
   // Raster graphics.
@@ -78,7 +90,7 @@ typedef struct {
   uint8_t runState;            // inside a compressed row
   uint32_t runCount;
 
-  uint32_t text;     // characters not drawn: no fonts yet
+  uint32_t missing;  // characters with no glyph in the font
   uint32_t ignored;  // commands not emulated
 } Pcl;
 

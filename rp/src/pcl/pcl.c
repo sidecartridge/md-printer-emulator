@@ -17,6 +17,8 @@
 
 #include <string.h>
 
+#include "pclfont.h"
+
 enum {
   ST_TEXT,
   ST_ESC,    // after ESC
@@ -41,6 +43,19 @@ enum {
 #define MARGIN_DEFAULT (PCL_UNITS / 2)  // the top margin, and below the text
 #define TAB_COLUMNS 8
 #define ESC 0x1B
+#define SET_ROMAN8 (8 * 32 + 'U' - '@')
+#define SET_PC8 (10 * 32 + 'U' - '@')
+#define SET_LATIN1 (0 * 32 + 'N' - '@')
+#define SET_ASCII (0 * 32 + 'U' - '@')
+#define UNDERLINE_BELOW 5  // dots below the baseline
+#define UNDERLINE_ROWS 3
+#define WEIGHT_BOLD 1  // stroke weights from here print bold
+
+enum {
+  DATA_SKIP,
+  DATA_RASTER,
+  DATA_TEXT,  // transparent print: characters, none a command
+};
 
 typedef struct {
   bool relative;  // it had a sign
@@ -84,7 +99,64 @@ static int32_t dots(int32_t units) {
   return units >= 0 ? (units + DOT / 2 - 1) / DOT : -((-units + DOT / 2) / DOT);
 }
 
+// ---- Fonts --------------------------------------------------------------
+
+// The built-in font nearest a selection: by pitch, then weight. Line Printer
+// has no bold.
+static uint8_t font_for(const PclFontSelect *sel) {
+  bool bold = sel->weight >= WEIGHT_BOLD;
+  if (sel->pitch >= 1500) return 4;             // Line Printer, 16.67
+  if (sel->pitch >= 1100) return bold ? 3 : 2;  // Courier, 12
+  return bold ? 1 : 0;                          // Courier, 10
+}
+
+static const PclFont *font(const Pcl *p) {
+  return &pcl_fonts[p->fonts[p->active].font];
+}
+
+// A font picked: the HMI is its pitch's.
+static void select_font(Pcl *p, int which) {
+  PclFontSelect *sel = &p->fonts[which];
+  sel->font = font_for(sel);
+  if (which == p->active) p->hmi = PCL_UNITS * 100 / font(p)->pitch;
+}
+
+// The character of a code in the active font's symbol set; 0 for none.
+static uint16_t character(const Pcl *p, uint8_t b) {
+  int32_t set = p->fonts[p->active].symbolSet;
+  if (b < 0x20 || b == 0x7F) return 0;
+  if (b < 0x80) return b;  // ASCII in each set
+  if (set == SET_PC8) return pcl_pc8[b - 0x80];
+  if (b < 0xA0 || set == SET_ASCII) return 0;
+  if (set == SET_LATIN1) return b;
+  return pcl_roman8[b - 0xA0];  // Roman-8, and the sets it stands in for
+}
+
+static const PclGlyph *glyph(const PclFont *f, uint16_t c) {
+  int lo = 0;
+  int hi = f->count - 1;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    if (f->glyphs[mid].code == c) return &f->glyphs[mid];
+    if (f->glyphs[mid].code < c) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return NULL;
+}
+
 static void reset(Pcl *p) {
+  for (int i = 0; i < 2; i++) {
+    p->fonts[i].symbolSet = SET_ROMAN8;
+    p->fonts[i].pitch = 1000;
+    p->fonts[i].weight = 0;
+    p->fonts[i].font = font_for(&p->fonts[i]);
+  }
+  p->active = 0;
+  p->wrap = false;
+  p->underline = false;
   p->hmi = HMI_DEFAULT;
   p->vmi = VMI_DEFAULT;
   p->topMargin = MARGIN_DEFAULT;
@@ -211,16 +283,94 @@ static void row_end(Pcl *p) {
   p->y += scale * DOT;
 }
 
+// ---- Text ---------------------------------------------------------------
+
+// The underline from x to the cursor, below the baseline.
+static void underline_to(Pcl *p, int32_t from) {
+  static const uint8_t ink[16] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                                  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                                  0xFF, 0xFF, 0xFF, 0xFF};
+  int32_t x = p->offset + dots(from);
+  int32_t width = dots(p->x) - dots(from);
+  if (width > (int32_t)sizeof(ink) * 8) width = (int32_t)sizeof(ink) * 8;
+  int32_t y = dots(p->topMargin + p->y) + UNDERLINE_BELOW;
+  for (int32_t r = 0; r < UNDERLINE_ROWS && width > 0; r++) {
+    p->sink.pixels(p->sink.ctx, x, y + r, ink, width, 1);
+  }
+}
+
+// A character at the cursor, which moves on a column. Without wrap, one that
+// starts past the right margin is dropped; with it, one that would end past
+// it goes to the next line (as GhostPCL).
+static void print(Pcl *p, uint8_t b) {
+  if (p->wrap ? p->x + p->hmi > p->rightMargin : p->x >= p->rightMargin) {
+    if (!p->wrap) return;
+    p->x = p->leftMargin;
+    line_feed(p);
+  }
+  uint16_t c = character(p, b);
+  const PclFont *f = font(p);
+  const PclGlyph *g = c && c != ' ' ? glyph(f, c) : NULL;
+  if (g != NULL) {
+    int32_t x = p->offset + dots(p->x) + g->left;
+    int32_t y = dots(p->topMargin + p->y) - g->top;
+    int32_t stride = (g->width + 7) / 8;
+    for (int32_t r = 0; r < g->height; r++) {
+      p->sink.pixels(p->sink.ctx, x, y + r, f->bits + g->bits + r * stride,
+                     g->width, 1);
+    }
+    p->pageDirty = true;
+  } else if (c != ' ') {
+    p->missing++;
+  }
+  int32_t from = p->x;
+  p->x += p->hmi;
+  if (p->underline) {
+    underline_to(p, from);
+    p->pageDirty = true;
+  }
+}
+
 // ---- Commands ----------------------------------------------------------
 
 // The value is the length of data that follows.
-static void data(Pcl *p, Value v, bool raster) {
+static void data(Pcl *p, Value v, uint8_t kind) {
   p->dataLeft = v.milli > 0 ? (uint32_t)whole(v) : 0;
-  p->dataRaster = raster;
-  if (raster) {
+  p->dataKind = kind;
+  if (kind == DATA_RASTER) {
     row_begin(p);
     if (p->dataLeft == 0) row_end(p);
   }
+}
+
+// ESC (s and ESC )s: a font's characteristics; ESC (#U and ESC )#U: its
+// symbol set.
+static void font_command(Pcl *p, int which, char end, Value v) {
+  PclFontSelect *sel = &p->fonts[which];
+  int32_t n = whole(v);
+  if (p->group == 0) {
+    if (end >= 'A' && end <= 'Z' && end != 'X') {
+      sel->symbolSet = n * 32 + (end - '@');
+    } else {
+      p->ignored++;  // a font by its ID
+    }
+    return;
+  }
+  switch (end) {
+    case 'H':
+      sel->pitch = v.milli / 10;
+      break;
+    case 'B':
+      sel->weight = (uint8_t)(n > 0 ? n : 0);
+      break;
+    case 'W':  // a font's or a character's data: no soft fonts
+      p->ignored++;
+      data(p, v, DATA_SKIP);
+      return;
+    default:  // spacing, height, style, typeface: one font each
+      return;
+  }
+  select_font(p, which);
 }
 
 static void parameterized(Pcl *p, char end) {
@@ -293,12 +443,35 @@ static void parameterized(Pcl *p, char end) {
       if (p->x < 0) p->x = 0;
       return;
     case '&' << 8 | 'p':
-      if (end == 'X') {  // transparent print: characters, not drawn yet
-        p->text += (uint32_t)(n > 0 ? n : 0);
-        data(p, v, false);
+      if (end == 'X') {  // transparent print: characters, none a command
+        data(p, v, DATA_TEXT);
         return;
       }
       p->ignored++;
+      return;
+    case '&' << 8 | 's':
+      if (end == 'C') {
+        p->wrap = n == 0;
+      } else {
+        p->ignored++;
+      }
+      return;
+    case '&' << 8 | 'd':
+      if (end == 'D') {
+        p->underline = true;
+      } else if (end == '@') {
+        p->underline = false;
+      } else {
+        p->ignored++;
+      }
+      return;
+    case '(' << 8 | 's':
+    case '(' << 8 | 0:
+      font_command(p, 0, end, v);
+      return;
+    case ')' << 8 | 's':
+    case ')' << 8 | 0:
+      font_command(p, 1, end, v);
       return;
     case '*' << 8 | 'p':
       if (end == 'X') {
@@ -326,7 +499,7 @@ static void parameterized(Pcl *p, char end) {
       return;
     case '*' << 8 | 'b':
       if (end == 'W') {
-        data(p, v, true);
+        data(p, v, DATA_RASTER);
       } else if (end == 'M') {
         p->compression = (uint8_t)(n >= 0 && n <= 3 ? n : 0);
       } else if (end == 'Y') {  // rows of no ink
@@ -339,11 +512,9 @@ static void parameterized(Pcl *p, char end) {
     default:
       break;
   }
-  // Not emulated: rectangles, fonts, macros... The ones with data skip it.
+  // Not emulated: rectangles, macros... The ones with data skip it.
   p->ignored++;
-  if (end == 'W' || (p->param == '&' && p->group == 'p' && end == 'X')) {
-    data(p, v, false);
-  }
+  if (end == 'W') data(p, v, DATA_SKIP);
 }
 
 static void two_character(Pcl *p, uint8_t c) {
@@ -385,15 +556,16 @@ static void text(Pcl *p, uint8_t b) {
       p->x = p->leftMargin + ((p->x - p->leftMargin) / tab + 1) * tab;
       return;
     }
+    case 0x0E:  // SO: the secondary font
+    case 0x0F:  // SI: the primary
+      p->active = b == 0x0E;
+      p->hmi = PCL_UNITS * 100 / font(p)->pitch;
+      return;
     default:
       break;
   }
-  if (b < 0x20) return;  // SO, SI and the rest: no fonts yet
-  if (b != ' ') {
-    p->text++;
-    p->pageDirty = true;
-  }
-  p->x += p->hmi;
+  if (b < 0x20) return;
+  print(p, b);
 }
 
 // ---- Entry points ------------------------------------------------------
@@ -437,9 +609,13 @@ void pcl_byte(Pcl *p, uint8_t b) {
       p->group = 0;
       break;  // a value's first character, below
     case ST_DATA:
-      if (p->dataRaster) row_byte(p, b);
+      if (p->dataKind == DATA_RASTER) {
+        row_byte(p, b);
+      } else if (p->dataKind == DATA_TEXT) {
+        print(p, b);
+      }
       if (--p->dataLeft == 0) {
-        if (p->dataRaster) row_end(p);
+        if (p->dataKind == DATA_RASTER) row_end(p);
         p->valueLength = 0;
         p->state = p->moreValues ? ST_VALUE : ST_TEXT;
       }

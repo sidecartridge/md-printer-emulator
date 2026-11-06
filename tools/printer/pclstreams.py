@@ -12,6 +12,12 @@
               lines an inch, the top and left margins; characters, which move
               the cursor although they are not drawn yet; commands combined
               (ESC &a10c5R)
+  TEXT.PCL    text in the built-in fonts: Courier 10 and 12 pitch, medium
+              and bold, Line Printer; Roman-8, PC-8 and ISO Latin 1's
+              characters above 127; a secondary font (SO, SI); underline;
+              transparent print; a line past the right margin dropped, then
+              wrapped; text placed by columns and rows, and in dots; HMI;
+              backspace and tab; text past the page's foot onto the next page
   PAGES.PCL   the ways a page ends: a form feed, a reset with something on
               the page, line feeds past the text's foot, and with the
               perforation skip off past the paper's; the cursor after each
@@ -150,6 +156,34 @@ def moves_stream():
     return out + b"\f"
 
 
+def text_stream():
+    crlf = b"\r\n"
+    out = cmd("E")
+    out += b"Courier 10 pitch, 12 point: The quick brown fox jumps over" + crlf
+    out += b"the lazy dog. 0123456789 !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~" + crlf
+    out += cmd("(s3B") + b"Bold: The quick brown fox jumps over the lazy dog." + cmd("(s0B") + crlf
+    out += cmd("(s12H") + b"Courier 12 pitch, 10 point: The quick brown fox jumps over the lazy dog." + crlf
+    out += cmd("(s3B") + b"Bold at 12 pitch: The quick brown fox jumps over the lazy dog." + cmd("(s0B") + crlf
+    out += cmd("(s16.67H") + b"Line Printer 16.67 pitch: The quick brown fox jumps over the lazy dog. 0123456789" + crlf
+    out += cmd("(s10H") + crlf
+    out += cmd("(8U") + b"Roman-8:  " + bytes(range(0xA0, 0xD0)) + crlf + b"          " + bytes(range(0xD0, 0x100)) + crlf
+    out += cmd("(10U") + b"PC-8:     " + bytes(range(0x80, 0xB0)) + crlf + b"          " + bytes(range(0xE0, 0x100)) + crlf
+    out += cmd("(0N") + b"Latin 1:  " + bytes(range(0xA0, 0xD0)) + crlf + b"          " + bytes(range(0xD0, 0x100)) + crlf
+    out += cmd("(8U") + crlf
+    out += cmd(")s16.67H") + b"Primary, " + b"\x0e" + b"secondary (SO), " + b"\x0f" + b"primary again (SI)." + crlf
+    out += b"Some " + cmd("&d0D") + b"underlined words" + cmd("&d@") + b", then not." + crlf
+    out += b"Transparent print: " + cmd("&p6X") + b"<\x1bE\r\n>" + b" end." + crlf
+    long = b"A line longer than the page is wide: " + b"0123456789" * 9
+    out += long + crlf
+    out += cmd("&s0C") + long + cmd("&s1C") + crlf
+    out += cmd("&a40C") + b"column 40" + cmd("&a+2R") + b"two rows down" + crlf
+    out += cmd("*p600x2000Y") + b"at 600, 2000 dots" + crlf
+    out += cmd("&k20H") + b"HMI 1/6 inch" + cmd("(s10H") + crlf
+    out += b"overstrike: a\b_ tab:\tafter a tab\t|" + crlf
+    out += b"\r\n".join(b"line %d to the foot of the page" % n for n in range(1, 40)) + crlf
+    return out + b"\f"
+
+
 def pages_stream():
     out = cmd("E") + mark() + b"\f"            # a form feed
     out += mark() + cmd("E")                    # a reset with ink on the page
@@ -166,7 +200,7 @@ def main():
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
     for name, data in (("RASTER.PCL", raster_stream()), ("MOVES.PCL", moves_stream()),
-                       ("PAGES.PCL", pages_stream())):
+                       ("TEXT.PCL", text_stream()), ("PAGES.PCL", pages_stream())):
         (out / name).write_bytes(data)
 
 

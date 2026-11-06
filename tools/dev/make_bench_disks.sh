@@ -14,6 +14,10 @@
 #                 (tools/printer/pclstreams.py: RASTER.PCL, PAGES.PCL), one
 #                 LaserJet job; pcl-expected.prn, and pcl-expected.pdf and
 #                 pcl-expected.pages, as the firmware renders it on A4
+#   plain.st      the same with plain text, no escape code, as TEXT.PRN and
+#                 GRAPH.PRN (tools/dev/st/documents/desktop/PRINT.TXT);
+#                 plain-expected.prn, and plain-laserjet.pdf and
+#                 plain-laserjet.pages, as the firmware's LaserJet prints it
 #
 # Usage:  tools/dev/make_bench_disks.sh
 
@@ -51,3 +55,11 @@ cat "$WORK/pcl/TEXT.PRN" "$WORK/pcl/GRAPH.PRN" > "$OUT/pcl-expected.prn"
 "$DEV/builds/printer/render" --pdf "$OUT/pcl-expected.pdf" "$OUT/pcl-expected.prn" "$WORK/pages" \
   > "$OUT/pcl-expected.pages" 2> /dev/null
 "$DEV/make_floppy.sh" "$WORK/pcl" "$OUT/pcl.st" PCL
+mkdir -p "$WORK/plain/AUTO"
+cp "$DEV/builds/st/PRFILES.PRG" "$WORK/plain/AUTO/"
+cp "$DEV/st/documents/desktop/PRINT.TXT" "$WORK/plain/TEXT.PRN"
+cp "$DEV/st/documents/desktop/PRINT.TXT" "$WORK/plain/GRAPH.PRN"
+cat "$WORK/plain/TEXT.PRN" "$WORK/plain/GRAPH.PRN" > "$OUT/plain-expected.prn"
+"$DEV/builds/printer/render" --laserjet --pdf "$OUT/plain-laserjet.pdf" "$OUT/plain-expected.prn" \
+  "$WORK/pages" > "$OUT/plain-laserjet.pages" 2> /dev/null
+"$DEV/make_floppy.sh" "$WORK/plain" "$OUT/plain.st" PLAIN

@@ -191,15 +191,22 @@ What a program prints on the ST becomes bytes on the RP:
   when the job's first escape sequence is PCL's alone (`pcl_recognise`: ESC &, ESC *, ESC ( or
   ESC % followed by a lowercase letter, a digit or a minus; ESC E, which both have, is passed
   over). `pcl.c` follows the stream and draws its raster graphics (75-300 dpi, compression modes
-  0-3) pixel for pixel on a 300 dpi page, with PCL's cursor, margins and page; text is not drawn
-  yet. The two printers share their RAM (a union in `pages.c`), and the LaserJet's band is the
+  0-3) pixel for pixel on a 300 dpi page, with PCL's cursor, margins and page, and its text in the
+  LaserJet II's built-in fonts (Courier 10 and 12 pitch, medium and bold; Line Printer), picked by
+  pitch and stroke weight, in Roman-8, PC-8, ISO Latin 1 or ASCII, with the secondary font (SO,
+  SI), underline, wrap and transparent print. The fonts are bitmaps in `pcl/pclfont.c`, generated
+  by `tools/printer/pclfont.sh` (FreeType) from Courier Prime (SIL Open Font License,
+  `pcl/OFL.txt`) and, for the characters it lacks (PC-8's Greek, mathematics, box drawing), DejaVu
+  Sans Mono (Bitstream Vera's licence, `pcl/DEJAVU-LICENSE.txt`); about 133 KB of flash. Never
+  edit `pclfont.c` by hand; keep both licence files beside it. The two printers share their RAM (a union in `pages.c`), and the LaserJet's band is the
   same 32 KB (about 100 rows at 300 dpi). PCL may move back up the page: `pclpage.c` reads each
   page first only to simulate the band, then draws it through the band or, when it would draw
   above it, window by window, a pass over the page's bytes per window (`raster.c`'s window
   mode); the debug log gives the passes. Its reference on the Mac is GhostPCL, built from
   source under `tools/dev/builds/ghostpcl` (AGPL, a comparison only): `tools/printer/pclref.py`
   renders a stream with it, and the host test compares our PCL streams (`pclstreams.py`) and the
-  captures in `tools/printer/local/pcl/` with it pixel for pixel when it is built.
+  captures in `tools/printer/local/pcl/` with it when it is built: pixel for pixel, or, for text,
+  which GhostPCL draws in its own Courier, by layout (`pclref.py --layout`, ink on a 24-dot grid).
   `tools/dev/pcl_scan.py` lists a stream's PCL commands.
 - **USB** (`rp/src/usbvol.c`, `rp/src/pdfvol/`): once the card is mounted and the Pico W's
   micro-USB brings power (VBUS, on the Wi-Fi chip), a computer sees `PDFPRINTER`, a read-only

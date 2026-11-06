@@ -86,7 +86,9 @@ done
 
 # The LaserJet (rp/src/pcl): our PCL streams, and local captures in
 # local/pcl/. Where GhostPCL is built (the reference, pclref.py), their pages
-# must be its pages, pixel for pixel; MOVES.PCL's only once text is drawn.
+# must be its pages, pixel for pixel, but for the ones with text, which it
+# draws in its own Courier: those must be laid out as its own (pclref.py
+# --layout).
 python3 "$HERE/pclstreams.py" "$BUILD/streams" > /dev/null
 reference() {  # reference NAME FILE [--letter]
   local name="$1" file="$2"
@@ -100,7 +102,19 @@ reference() {  # reference NAME FILE [--letter]
     echo "ok   $name: GhostPCL's pages"
   fi
 }
-for stream in RASTER.PCL MOVES.PCL PAGES.PCL; do
+layout() {  # layout NAME FILE [--letter]
+  local name="$1" file="$2" why
+  rm -rf "$BUILD/$name.ref"
+  mkdir -p "$BUILD/$name.ref"
+  "$BUILD/render" --laserjet "${@:3}" "$file" "$BUILD/$name.ref" > /dev/null 2>&1 || true
+  if why="$("$HERE/pclref.py" "${@:3}" --layout "$BUILD/$name.ref" "$file")"; then
+    echo "ok   $name: laid out as GhostPCL's"
+  else
+    echo "FAIL $name: ${why#FAIL }"
+    fail=1
+  fi
+}
+for stream in RASTER.PCL MOVES.PCL TEXT.PCL PAGES.PCL; do
   check "$stream" "$BUILD/streams/$stream" "$HERE/golden/$stream.pages" --laserjet
   check "$stream.letter" "$BUILD/streams/$stream" "$HERE/golden/$stream.letter.pages" --laserjet --letter
 done
@@ -114,6 +128,10 @@ if [ "$UPDATE" = 0 ] && compgen -G "$ROOT/tools/dev/builds/ghostpcl/src/ghostpdl
   for stream in RASTER.PCL PAGES.PCL; do
     reference "ref/$stream" "$BUILD/streams/$stream"
     reference "ref/$stream.letter" "$BUILD/streams/$stream" --letter
+  done
+  for stream in MOVES.PCL TEXT.PCL; do
+    layout "ref/$stream" "$BUILD/streams/$stream"
+    layout "ref/$stream.letter" "$BUILD/streams/$stream" --letter
   done
   for capture in "$HERE"/local/pcl/*.prn; do
     [ -f "$capture" ] || continue
