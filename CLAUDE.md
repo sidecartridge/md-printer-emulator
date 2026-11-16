@@ -6,7 +6,7 @@ See also: `programming.md` (full shared-region table and budget rules), `README.
 
 ## What this repo is
 
-A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. What the ST prints reaches the card as a job and becomes a PDF there ("The printer path" below); `desc/app.json`, `README.md` and `CHANGELOG.md` are still the template's. Where this file says "the template", it describes the inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
+A **Sidecartridge Multi-device microfirmware app** for Atari ST / STE / MegaST(E): a printer emulator, created from the microfirmware app template at its v1.3.0. What the ST prints reaches the card as a job and becomes a PDF there ("The printer path" below); `README.md` opens with the user's guide (a later process copies it to docs.sidecartridge.com), and `CHANGELOG.md` starts at the app's v1.0.0, above the template's history. Where this file says "the template", it describes the inherited code. Each "app" is a UF2 image that runs on a Raspberry Pi Pico (RP2040) plugged into the Multi-device cartridge slot, emulating a ROM cartridge for the Atari while also handling networking, SD card I/O, and config. Public build/usage docs are at <https://docs.sidecartridge.com/sidecartridge-multidevice/programming/>.
 
 ## Build
 
@@ -43,7 +43,7 @@ Build flow (orchestrated by `build.sh`). Every script stops at the first failing
 ### CI / release
 - `.github/workflows/build.yml` builds `pico_w` on every pull request: release and debug.
 - `.github/workflows/release.yml` triggers on `v*` tags: builds, attaches UF2 + JSON to the GitHub Release, uploads to `s3://atarist.sidecartridge.com/`.
-- `make tag` tags HEAD with the contents of `version.txt` and pushes the tag (which triggers release). This is an app repo, so releases are tagged here, but **tagging is the repo owner's call**: a change lands as a `version.txt` bump plus a `CHANGELOG.md` entry, and the owner tags. The first release still needs `desc/app.json` filled in (the `uuid` placeholder is substituted by the build; `name`, `description`, `image`, `tags` and the `binary` host are not) and the UUID in `.vscode/cmake-variants.yaml` (the development one, `44444444-…`) replaced by this app's.
+- `make tag` tags HEAD with the contents of `version.txt` and pushes the tag (which triggers release). This is an app repo, so releases are tagged here, but **tagging is the repo owner's call**: a change lands as a `version.txt` bump plus a `CHANGELOG.md` entry, and the owner tags. `desc/app.json` is filled in; its `uuid`, version and MD5 placeholders are substituted by the build. The release workflow builds with the `APP_UUID` secret (the development UUID `44444444-…` when it is unset, which skips S3).
 - `upload_s3.sh <file>` is a manual one-off uploader; needs `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
 
 ### Tests / verification

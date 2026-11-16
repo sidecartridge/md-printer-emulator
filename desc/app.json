@@ -1,10 +1,12 @@
 {
   "uuid": "<APP_UUID>",
-  "name": "APP DEV Template",
-  "description": "Microfirmware Application Template for Atari ST",
-  "image": "https://placehold.co/256x256/png",
+  "name": "Printer Emulator",
+  "description": "Print like it's 1989, collect PDFs. Your Atari thinks it has an Epson FX-80 or an HP LaserJet II; the pages land on the SD card as PDFs, ready to read over USB. <a target='_blank' rel='noopener noreferrer' href='https://docs.sidecartridge.com/sidecartridge-multidevice/microfirmwares/printer-emulator/'>Learn more</a>",
+  "image": "https://raw.githubusercontent.com/sidecartridge/md-printer-emulator/main/icon.png",
   "tags": [
-    "Sample"
+    "Emulation",
+    "Printer",
+    "PDF"
   ],
   "devices": [
     "ST",
