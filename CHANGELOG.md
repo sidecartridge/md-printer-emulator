@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.0.0 (2026-11-16) - release
+
+The first Printer Emulator. The Atari ST, STE, Mega ST and Mega STE print
+as if an Epson FX-80 or an HP LaserJet II were plugged into the printer
+port, and every job becomes a PDF on the microSD card, readable from a
+computer over USB. Built from the microfirmware app template v1.3.0, whose
+history follows this entry.
+
+- **The printer**: installed in the ST's RAM at every boot, it catches
+  everything printed through TOS (Alt-Help, the desktop's Print, GEMDOS
+  and BIOS printing, GDOS drivers) and sends it to the Multi-device in
+  1 KB blocks. Works at 8 MHz, 16 MHz and with the cache on a Mega STE.
+- **Epson FX-80**: ESC/P text and bit images at 240 x 216 dpi, with the
+  Atari's characters for codes 128 to 255.
+- **HP LaserJet II**: PCL 4 raster graphics (75 to 300 dpi, compression
+  modes 0 to 3) and text in the built-in fonts (Courier 10 and 12 pitch,
+  medium and bold; Line Printer) in Roman-8, PC-8, ISO Latin 1 and ASCII.
+- **Auto** (the default) sends each job to the printer it was written
+  for; the menu can also force either printer.
+- **PDFs**: one per job, `nnnnnnnn.pdf` in `/PRINTER` (or a folder chosen
+  in the menu), A4 or Letter; a job ends after 5 to 120 seconds of quiet
+  (10 by default) or when the ST is reset. Numbers never repeat, and a job
+  cut short by a power cut still becomes a PDF.
+- **PDFPRINTER**: the PDFs as a read-only USB drive on the Pico W's
+  micro-USB; a new PDF appears on a Mac about 8 seconds after it is made.
+- **The setup menu**: the printer, paper, timeout and folder, the jobs,
+  the card, the USB drive and the Atari, with a 20-second countdown that
+  starts the printer.
+- **Known issues**: programs that drive the printer port's hardware
+  (Calamus 1.x, Signum 3's default channel) are not caught; the LaserJet
+  prints portrait only and does not draw filled rectangles; USB tested on
+  macOS only; files are dated 1970 (no clock).
+
 ## v1.3.0 (2026-09-29) - release
 
 A reliability release. The command path between the ST and the RP now
